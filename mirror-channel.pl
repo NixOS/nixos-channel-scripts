@@ -16,8 +16,7 @@ my $dstChannelPath = $ARGV[2];
 die "$dstChannelPath doesn't exist\n" unless -d $dstChannelPath;
 
 my ($fh, $tmpManifest) = tempfile(UNLINK => 1);
-print "$tmpManifest\n";
-system("curl '$srcChannelURL/MANIFEST' > $tmpManifest") == 0 or die;
+system("curl --fail '$srcChannelURL/MANIFEST' > $tmpManifest") == 0 or die;
 
 # Read the manifest.
 my %narFiles;
@@ -47,7 +46,7 @@ while (my ($storePath, $files) = each %narFiles) {
         if (! -e $dstFile) {
             print "downloading $srcURL\n";
             my $dstFileTmp = "$dstChannelPath/.tmp.$$.nar.$dstName";
-            system("curl '$srcURL' > $dstFileTmp") == 0 or die;
+            system("curl --fail '$srcURL' > $dstFileTmp") == 0 or die;
             rename($dstFileTmp, $dstFile) or die "cannot rename $dstFileTmp";
         }
         
@@ -72,3 +71,8 @@ while (my ($storePath, $files) = each %narFiles) {
 
 # Write the new manifest.
 writeManifest("$dstChannelPath/MANIFEST", \%narFiles, \%patches);
+
+# Mirror nixexprs.tar.bz2.
+my $tmpFile = "$dstChannelPath/.tmp.$$.nixexprs.tar.bz2";
+system("curl --fail '$srcChannelURL/nixexprs.tar.bz2' > $tmpFile") == 0 or die;
+rename($tmpFile, "$dstChannelPath/nixexprs.tar.bz2") or die "cannot rename $tmpFile";
