@@ -38,8 +38,10 @@ print "$size store paths in manifest\n";
 
 while (my ($storePath, $files) = each %narFiles) {
     foreach my $file (@{$files}) {
+        my $narHash = $file->{narHash};
         my $srcURL = $file->{url};
-        my $dstName = basename $srcURL;
+        my $dstName = $narHash;
+        $dstName =~ s/:/_/; # `:' in filenames might cause problems
         my $dstFile = "$dstChannelPath/$dstName";
         my $dstURL = "$dstChannelURL/$dstName";
         
