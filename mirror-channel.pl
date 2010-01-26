@@ -3,6 +3,7 @@ use readmanifest;
 use File::Basename;
 use File::stat;
 use File::Temp qw/tempfile/;
+use Fcntl ':flock';
 
 if (scalar @ARGV != 3 && scalar @ARGV != 4) {
     print STDERR "Syntax: perl mirror-channel.pl <src-channel-url> <dst-channel-url> <dst-channel-dir> [<nix-exprs-url>]\n";
@@ -17,6 +18,9 @@ my $dstChannelPath = $ARGV[2];
 my $nixexprsURL = $ARGV[3] || "$srcChannelURL/nixexprs.tar.bz2";
 
 die "$dstChannelPath doesn't exist\n" unless -d $dstChannelPath;
+
+open LOCK, ">$dstChannelPath/.lock" or die;
+flock LOCK, LOCK_EX;
 
 my ($fh, $tmpManifest) = tempfile(UNLINK => 1);
 system("$curl '$srcChannelURL/MANIFEST' > $tmpManifest") == 0 or die;
