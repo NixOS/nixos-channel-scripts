@@ -38,6 +38,9 @@ my $version = readManifest($tmpManifest, \%narFiles, \%localPaths, \%patches);
 my $size = scalar (keys %narFiles);
 print "$size store paths in manifest\n";
 
+# Protect against Hydra problems that leave the channel empty.
+die "cowardly refusing to mirror an empty channel" if $size == 0;
+
 # Download every file that we don't already have, and update every URL
 # to point to the mirror.  Also fill in the size and hash fields in
 # the manifest in order to be compatible with Nix < 0.13.
