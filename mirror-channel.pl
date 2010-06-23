@@ -5,19 +5,24 @@ use File::stat;
 use File::Temp qw/tempfile/;
 use Fcntl ':flock';
 
-if (scalar @ARGV != 3 && scalar @ARGV != 4) {
-    print STDERR "Syntax: perl mirror-channel.pl <src-channel-url> <dst-channel-url> <dst-channel-dir> [<nix-exprs-url>]\n";
+if (scalar @ARGV != 6 && scalar @ARGV != 7) {
+    print STDERR "Syntax: perl mirror-channel.pl <src-channel-url> <dst-channel-dir> <nar-dir> <nar-url> <patches-dir> <patches-url> [<nix-exprs-url>]\n";
     exit 1;
 }
 
 my $curl = "curl --location --silent --show-error --fail";
 
 my $srcChannelURL = $ARGV[0];
-my $dstChannelURL = $ARGV[1];
-my $dstChannelPath = $ARGV[2];
-my $nixexprsURL = $ARGV[3] || "$srcChannelURL/nixexprs.tar.bz2";
+my $dstChannelPath = $ARGV[1];
+my $narPath = $ARGV[2];
+my $narURL = $ARGV[3];
+my $patchesPath = $ARGV[4];
+my $patchesURL = $ARGV[5];
+my $nixexprsURL = $ARGV[6] || "$srcChannelURL/nixexprs.tar.bz2";
 
 die "$dstChannelPath doesn't exist\n" unless -d $dstChannelPath;
+die "$narPath doesn't exist\n" unless -d $narPath;
+die "$patchesPath doesn't exist\n" unless -d $patchesPath;
 
 open LOCK, ">$dstChannelPath/.lock" or die;
 flock LOCK, LOCK_EX;
@@ -51,20 +56,20 @@ while (my ($storePath, $files) = each %narFiles) {
         my $srcURL = $file->{url};
         my $dstName = $narHash;
         $dstName =~ s/:/_/; # `:' in filenames might cause problems
-        my $dstFile = "$dstChannelPath/$dstName";
-        my $dstURL = "$dstChannelURL/$dstName";
+        my $dstFile = "$narPath/$dstName";
+        my $dstURL = "$narURL/$dstName";
         
         $file->{url} = $dstURL;
         if (! -e $dstFile) {
             print "downloading $srcURL\n";
-            my $dstFileTmp = "$dstChannelPath/.tmp.$$.nar.$dstName";
-            system("$curl '$srcURL' > $dstFileTmp") == 0 or die;
+            my $dstFileTmp = "$narPath/.tmp.$$.nar.$dstName";
+            system("$curl '$srcURL' > $dstFileTmp") == 0 or next;
             rename($dstFileTmp, $dstFile) or die "cannot rename $dstFileTmp";
         }
         
         $file->{size} = stat($dstFile)->size or die;
 
-        my $hashFile = "$dstChannelPath/.hash.$dstName";
+        my $hashFile = "$narPath/.hash.$dstName";
         my $hash;
         if (-e $hashFile) {
             open HASH, "<$hashFile" or die;
@@ -86,5 +91,15 @@ writeManifest("$dstChannelPath/MANIFEST", \%narFiles, \%patches);
 
 # Mirror nixexprs.tar.bz2.
 my $tmpFile = "$dstChannelPath/.tmp.$$.nixexprs.tar.bz2";
-system("$curl '$nixexprsURL' > $tmpFile") == 0 or die;
+system("$curl '$nixexprsURL' > $tmpFile") == 0 or die "cannot download `$nixexprsURL'";
 rename($tmpFile, "$dstChannelPath/nixexprs.tar.bz2") or die "cannot rename $tmpFile";
+
+# Remove ".hash.*" files corresponding to NARs that have been removed.
+foreach my $fn (glob "$narPath/.hash.*") {
+    my $fn2 = $fn;
+    $fn2 =~ s/\.hash\.//;
+    if (! -e "$fn2") {
+	print STDERR "removing hash $fn\n";
+	unlink "$fn";
+    }
+}
