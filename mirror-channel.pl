@@ -67,7 +67,7 @@ while (my ($storePath, $files) = each %narFiles) {
             rename($dstFileTmp, $dstFile) or die "cannot rename $dstFileTmp";
         }
         
-        $file->{size} = stat($dstFile)->size or die;
+        $file->{size} = stat($dstFile)->size or die "cannot get size of $dstFile";
 
         my $hashFile = "$narPath/.hash.$dstName";
         my $hash;
@@ -87,7 +87,14 @@ while (my ($storePath, $files) = each %narFiles) {
 }
 
 # Write the new manifest.
-writeManifest("$dstChannelPath/MANIFEST", \%narFiles, \%patches);
+writeManifest("$dstChannelPath/MANIFEST.tmp", \%narFiles, \%patches);
+
+# Generate patches.
+if (-e "$dstChannelPath/MANIFEST.tmp") {
+    system("perl -I /home/buildfarm/nix/scripts /home/buildfarm/nix/scripts/generate-patches.pl $narPath $patchesPath $patchesURL $dstChannelPath/MANIFEST $dstChannelPath/MANIFEST.tmp") == 0 or die;
+    rename("$dstChannelPath/MANIFEST.tmp", "$dstChannelPath/MANIFEST") or die;
+    rename("$dstChannelPath/MANIFEST.tmp.bz2", "$dstChannelPath/MANIFEST.bz2") or die;
+}
 
 # Mirror nixexprs.tar.bz2.
 my $tmpFile = "$dstChannelPath/.tmp.$$.nixexprs.tar.bz2";
@@ -95,11 +102,11 @@ system("$curl '$nixexprsURL' > $tmpFile") == 0 or die "cannot download `$nixexpr
 rename($tmpFile, "$dstChannelPath/nixexprs.tar.bz2") or die "cannot rename $tmpFile";
 
 # Remove ".hash.*" files corresponding to NARs that have been removed.
-foreach my $fn (glob "$narPath/.hash.*") {
-    my $fn2 = $fn;
-    $fn2 =~ s/\.hash\.//;
-    if (! -e "$fn2") {
-	print STDERR "removing hash $fn\n";
-	unlink "$fn";
-    }
-}
+#foreach my $fn (glob "$narPath/.hash.*") {
+#    my $fn2 = $fn;
+#    $fn2 =~ s/\.hash\.//;
+#    if (! -e "$fn2") {
+#	print STDERR "removing hash $fn\n";
+#	unlink "$fn";
+#    }
+#}
