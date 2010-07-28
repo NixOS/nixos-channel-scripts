@@ -63,7 +63,7 @@ while (my ($storePath, $files) = each %narFiles) {
         if (! -e $dstFile) {
             print "downloading $srcURL\n";
             my $dstFileTmp = "$narPath/.tmp.$$.nar.$dstName";
-            system("$curl '$srcURL' > $dstFileTmp") == 0 or next;
+            system("$curl '$srcURL' > $dstFileTmp") == 0 or die "failed to download `$srcURL'";
             rename($dstFileTmp, $dstFile) or die "cannot rename $dstFileTmp";
         }
         
