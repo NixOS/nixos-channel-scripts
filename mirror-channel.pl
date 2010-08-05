@@ -90,11 +90,12 @@ while (my ($storePath, $files) = each %narFiles) {
 writeManifest("$dstChannelPath/MANIFEST.tmp", \%narFiles, \%patches);
 
 # Generate patches.
-if (-e "$dstChannelPath/MANIFEST.tmp") {
+if (0 && -e "$dstChannelPath/MANIFEST.tmp") {
     system("perl -I /home/buildfarm/nix/scripts /home/buildfarm/nix/scripts/generate-patches.pl $narPath $patchesPath $patchesURL $dstChannelPath/MANIFEST $dstChannelPath/MANIFEST.tmp") == 0 or die;
-    rename("$dstChannelPath/MANIFEST.tmp", "$dstChannelPath/MANIFEST") or die;
-    rename("$dstChannelPath/MANIFEST.tmp.bz2", "$dstChannelPath/MANIFEST.bz2") or die;
 }
+
+rename("$dstChannelPath/MANIFEST.tmp", "$dstChannelPath/MANIFEST") or die;
+rename("$dstChannelPath/MANIFEST.tmp.bz2", "$dstChannelPath/MANIFEST.bz2") or die;
 
 # Mirror nixexprs.tar.bz2.
 my $tmpFile = "$dstChannelPath/.tmp.$$.nixexprs.tar.bz2";
