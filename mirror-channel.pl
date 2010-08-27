@@ -27,6 +27,22 @@ die "$patchesPath doesn't exist\n" unless -d $patchesPath;
 open LOCK, ">$dstChannelPath/.lock" or die;
 flock LOCK, LOCK_EX;
 
+system("date");
+
+# Read the old manifest, if available.
+my %narFilesOld;
+my %localPathsOld;
+my %patchesOld;
+
+readManifest("$dstChannelPath/MANIFEST", \%narFilesOld, \%localPathsOld, \%patchesOld)
+    if -f "$dstChannelPath/MANIFEST";
+
+my %knownURLs;
+while (my ($storePath, $files) = each %narFilesOld) {
+    $knownURLs{$_->{url}} = $_ foreach @{$files};
+}
+
+# Fetch the new manifest.
 my ($fh, $tmpManifest) = tempfile(UNLINK => 1);
 system("$curl '$srcChannelURL/MANIFEST' > $tmpManifest") == 0 or die;
 
@@ -35,7 +51,7 @@ my %narFiles;
 my %localPaths;
 my %patches;
 
-my $version = readManifest($tmpManifest, \%narFiles, \%localPaths, \%patches);
+readManifest($tmpManifest, \%narFiles, \%localPaths, \%patches);
 
 %localPaths = ();
 %patches = (); # not supported yet
@@ -66,23 +82,30 @@ while (my ($storePath, $files) = each %narFiles) {
             system("$curl '$srcURL' > $dstFileTmp") == 0 or die "failed to download `$srcURL'";
             rename($dstFileTmp, $dstFile) or die "cannot rename $dstFileTmp";
         }
-        
-        $file->{size} = stat($dstFile)->size or die "cannot get size of $dstFile";
 
-        my $hashFile = "$narPath/.hash.$dstName";
-        my $hash;
-        if (-e $hashFile) {
-            open HASH, "<$hashFile" or die;
-            $hash = <HASH>;
-            close HASH;
+        my $old = $knownURLs{$dstURL};
+
+        if (defined $old) {
+            $file->{size} = $old->{size};
+            $file->{hash} = $old->{hash};
         } else {
-            $hash = `nix-hash --flat --type sha256 --base32 '$dstFile'` or die;
-            chomp $hash;
-            open HASH, ">$hashFile" or die;
-            print HASH $hash;
-            close HASH;
+            $file->{size} = stat($dstFile)->size or die "cannot get size of $dstFile";
+
+            my $hashFile = "$narPath/.hash.$dstName";
+            my $hash;
+            if (-e $hashFile) {
+                open HASH, "<$hashFile" or die;
+                $hash = <HASH>;
+                close HASH;
+            } else {
+                $hash = `nix-hash --flat --type sha256 --base32 '$dstFile'` or die;
+                chomp $hash;
+                open HASH, ">$hashFile" or die;
+                print HASH $hash;
+                close HASH;
+            }
+            $file->{hash} = "sha256:$hash";
         }
-        $file->{hash} = "sha256:$hash";
     }
 }
 
