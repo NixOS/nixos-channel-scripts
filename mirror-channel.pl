@@ -113,8 +113,8 @@ while (my ($storePath, $files) = each %narFiles) {
 writeManifest("$dstChannelPath/MANIFEST.tmp", \%narFiles, \%patches);
 
 # Generate patches.
-if (0 && -e "$dstChannelPath/MANIFEST.tmp") {
-    system("perl -I /home/buildfarm/nix/scripts /home/buildfarm/nix/scripts/generate-patches.pl $narPath $patchesPath $patchesURL $dstChannelPath/MANIFEST $dstChannelPath/MANIFEST.tmp") == 0 or die;
+if (defined $ENV{'ENABLE_PATCHES'} && -e "$dstChannelPath/MANIFEST.tmp") {
+    system("generate-patches.pl $narPath $patchesPath $patchesURL $dstChannelPath/MANIFEST $dstChannelPath/MANIFEST.tmp") == 0 or die;
 }
 
 rename("$dstChannelPath/MANIFEST.tmp", "$dstChannelPath/MANIFEST") or die;
