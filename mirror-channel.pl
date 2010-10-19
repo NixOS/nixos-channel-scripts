@@ -80,6 +80,7 @@ while (my ($storePath, $files) = each %narFiles) {
             print "downloading $srcURL\n";
             my $dstFileTmp = "$narPath/.tmp.$$.nar.$dstName";
             system("$curl '$srcURL' > $dstFileTmp") == 0 or die "failed to download `$srcURL'";
+            system("bunzip2 -t $dstFileTmp &> /dev/null") == 0 or die "downloaded file is not a bzip2 file!";
             rename($dstFileTmp, $dstFile) or die "cannot rename $dstFileTmp";
         }
 
