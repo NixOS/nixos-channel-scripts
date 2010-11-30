@@ -37,6 +37,8 @@ die "$dstChannelPath doesn't exist\n" unless -d $dstChannelPath;
 die "$narPath doesn't exist\n" unless -d $narPath;
 die "$patchesPath doesn't exist\n" unless -d $patchesPath;
 
+my $manifestPath = "$dstChannelPath/MANIFEST";
+
 my $tmpDir = tempdir("nix-mirror-XXXXXXX", TMPDIR => 1, CLEANUP => 1);
 print STDERR "$tmpDir\n";
 
@@ -47,13 +49,20 @@ flock LOCK, LOCK_EX;
 print STDERR "started mirroring at ", strftime("%a %b %e %H:%M:%S %Y", localtime), "\n";
 
 
+# Backup the old manifest once per day.
+my $backupPath = strftime("$dstChannelPath/MANIFEST.backup-%Y%m%d", gmtime);
+if (-f $manifestPath && ! -f $backupPath) {
+    system "cp $manifestPath $backupPath";
+}
+
+
 # Read the old manifest, if available.
 my %narFilesOld;
 my %localPathsOld;
 my %patchesOld;
 
-readManifest("$dstChannelPath/MANIFEST", \%narFilesOld, \%localPathsOld, \%patchesOld)
-    if -f "$dstChannelPath/MANIFEST";
+readManifest($manifestPath, \%narFilesOld, \%localPathsOld, \%patchesOld)
+    if -f $manifestPath;
 
 my %knownURLs;
 while (my ($storePath, $files) = each %narFilesOld) {
@@ -151,8 +160,8 @@ propagatePatches \%patchesOld, \%narFiles, \%patches; # not really needed
 # Make the temporary manifest available.
 writeManifest("$dstChannelPath/MANIFEST.tmp", \%narFiles, \%patches);
 
-rename("$dstChannelPath/MANIFEST.tmp", "$dstChannelPath/MANIFEST") or die;
-rename("$dstChannelPath/MANIFEST.tmp.bz2", "$dstChannelPath/MANIFEST.bz2") or die;
+rename("$dstChannelPath/MANIFEST.tmp", "$manifestPath") or die;
+rename("$dstChannelPath/MANIFEST.tmp.bz2", "$manifestPath.bz2") or die;
 
 
 # Mirror nixexprs.tar.bz2.  This should really be done atomically with updating the manifest.
@@ -188,9 +197,9 @@ if ($enablePatches) {
 
     # Rewrite the manifest.  We have to reread it and propagate all
     # patches because it may have changed in the meantime.
-    readManifest("$dstChannelPath/MANIFEST", \%narFiles, \%localPaths, \%patches);
+    readManifest($manifestPath, \%narFiles, \%localPaths, \%patches);
 
     propagatePatches \%allPatches, \%narFiles, \%patches;
 
-    writeManifest("$dstChannelPath/MANIFEST", \%narFiles, \%patches);
+    writeManifest($manifestPath, \%narFiles, \%patches);
 }
