@@ -8,7 +8,7 @@
 # job.
 
 use strict;
-use readmanifest;
+use NixManifest;
 use GeneratePatches;
 use File::Basename;
 use File::stat;
@@ -40,7 +40,6 @@ die "$patchesPath doesn't exist\n" unless -d $patchesPath;
 my $manifestPath = "$dstChannelPath/MANIFEST";
 
 my $tmpDir = tempdir("nix-mirror-XXXXXXX", TMPDIR => 1, CLEANUP => 1);
-print STDERR "$tmpDir\n";
 
 
 open LOCK, ">$dstChannelPath/.lock" or die;
@@ -108,7 +107,14 @@ while (my ($storePath, $files) = each %narFiles) {
             print "downloading $srcURL\n";
             my $dstFileTmp = "$narPath/.tmp.$$.nar.$dstName";
             system("$curl '$srcURL' > $dstFileTmp") == 0 or die "failed to download `$srcURL'";
-            system("bunzip2 -t $dstFileTmp &> /dev/null") == 0 or die "downloaded file is not a bzip2 file!";
+
+            # Verify whether the downloaded file is a bzipped NAR file
+            # that matches the NAR hash given in the manifest.
+            system("bunzip2 < $dstFileTmp > $tmpDir/out") == 0 or die "downloaded file is not a bzip2 file!";
+            my $hash = `nix-hash --type sha256 --flat $tmpDir/out`;
+            chomp $hash;
+            die "hash mismatch in downloaded file `$srcURL'" if "sha256:$hash" ne $file->{narHash};
+
             rename($dstFileTmp, $dstFile) or die "cannot rename $dstFileTmp";
         }
 
