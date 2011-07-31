@@ -57,10 +57,9 @@ if (-f $manifestPath && ! -f $backupPath) {
 
 # Read the old manifest, if available.
 my %narFilesOld;
-my %localPathsOld;
 my %patchesOld;
 
-readManifest($manifestPath, \%narFilesOld, \%localPathsOld, \%patchesOld)
+readManifest($manifestPath, \%narFilesOld, \%patchesOld)
     if -f $manifestPath;
 
 my %knownURLs;
@@ -75,10 +74,9 @@ system("$curl '$srcChannelURL/MANIFEST' > $srcManifest") == 0 or die;
 
 
 # Read the manifest.
-my (%narFiles, %localPaths, %patches);
-readManifest($srcManifest, \%narFiles, \%localPaths, \%patches);
+my (%narFiles, %patches);
+readManifest($srcManifest, \%narFiles, \%patches);
 
-%localPaths = ();
 %patches = (); # not supported yet
 
 my $size = scalar (keys %narFiles);
@@ -203,7 +201,7 @@ if ($enablePatches) {
 
     # Rewrite the manifest.  We have to reread it and propagate all
     # patches because it may have changed in the meantime.
-    readManifest($manifestPath, \%narFiles, \%localPaths, \%patches);
+    readManifest($manifestPath, \%narFiles, \%patches);
 
     propagatePatches \%allPatches, \%narFiles, \%patches;
 
