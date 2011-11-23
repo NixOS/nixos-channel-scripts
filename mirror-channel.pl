@@ -8,8 +8,8 @@
 # job.
 
 use strict;
-use NixManifest;
-use GeneratePatches;
+use Nix::Manifest;
+use Nix::GeneratePatches;
 use File::Basename;
 use File::stat;
 use File::Temp qw/tempfile tempdir/;
