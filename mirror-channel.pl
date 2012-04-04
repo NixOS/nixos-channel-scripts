@@ -1,81 +1,45 @@
 # This script mirrors a remote Nix channel in the local filesystem.
 # It downloads the remote manifest, then any NAR files that are not
-# already available in the target directory.  If $ENABLE_PATCHES is
-# set, it also generates patches between the NAR files in the old
-# version of the manifest and the new version.  Because this script
-# can take a long time to finish, it uses a lock to guard against
-# concurrent updates, allowing it to be run periodically from a cron
-# job.
+# already available in the target directory.
 
 use strict;
 use Nix::Manifest;
 use Nix::GeneratePatches;
 use File::Basename;
 use File::stat;
-use File::Temp qw/tempfile tempdir/;
-use Fcntl ':flock';
-use POSIX qw(strftime);
 
 
-if (scalar @ARGV != 6 && scalar @ARGV != 7) {
-    print STDERR "Syntax: perl mirror-channel.pl <src-channel-url> <dst-channel-dir> <nar-dir> <nar-url> <patches-dir> <patches-url> [<nix-exprs-url>]\n";
+if (scalar @ARGV < 4 || scalar @ARGV > 6) {
+    print STDERR "Syntax: perl mirror-channel.pl <src-channel-url> <dst-channel-dir> <nar-dir> <nar-url> [<all-patches-manifest [<nix-exprs-url>]]\n";
     exit 1;
 }
 
-my $curl = "curl --location --silent --show-error --fail";
+my $curl = "curl --location --no-progress-bar --show-error --fail";
 
 my $srcChannelURL = $ARGV[0];
 my $dstChannelPath = $ARGV[1];
 my $narPath = $ARGV[2];
 my $narURL = $ARGV[3];
-my $patchesPath = $ARGV[4];
-my $patchesURL = $ARGV[5];
-my $nixexprsURL = $ARGV[6] || "$srcChannelURL/nixexprs.tar.bz2";
-my $enablePatches = defined $ENV{'ENABLE_PATCHES'} && -e "$dstChannelPath/MANIFEST";
+my $allPatchesManifest = $ARGV[4] || "";
+my $nixexprsURL = $ARGV[5] || "$srcChannelURL/nixexprs.tar.bz2";
 
 die "$dstChannelPath doesn't exist\n" unless -d $dstChannelPath;
 die "$narPath doesn't exist\n" unless -d $narPath;
-die "$patchesPath doesn't exist\n" unless -d $patchesPath;
 
 my $manifestPath = "$dstChannelPath/MANIFEST";
 
-my $tmpDir = tempdir("nix-mirror-XXXXXXX", TMPDIR => 1, CLEANUP => 1);
+
+# Fetch the manifest.
+system("$curl '$srcChannelURL/MANIFEST' > $dstChannelPath/MANIFEST") == 0 or die;
 
 
-open LOCK, ">$dstChannelPath/.lock" or die;
-flock LOCK, LOCK_EX;
-
-print STDERR "started mirroring at ", strftime("%a %b %e %H:%M:%S %Y", localtime), "\n";
-
-
-# Backup the old manifest once per day.
-my $backupPath = strftime("$dstChannelPath/MANIFEST.backup-%Y%m%d", gmtime);
-if (-f $manifestPath && ! -f $backupPath) {
-    system "cp $manifestPath $backupPath";
-}
-
-
-# Read the old manifest, if available.
-my %narFilesOld;
-my %patchesOld;
-
-readManifest($manifestPath, \%narFilesOld, \%patchesOld)
-    if -f $manifestPath;
-
-my %knownURLs;
-while (my ($storePath, $files) = each %narFilesOld) {
-    $knownURLs{$_->{url}} = $_ foreach @{$files};
-}
-
-
-# Fetch the new manifest.
-my $srcManifest = "$tmpDir/MANIFEST.src";
-system("$curl '$srcChannelURL/MANIFEST' > $srcManifest") == 0 or die;
+# Mirror nixexprs.tar.bz2.
+system("$curl '$nixexprsURL' > $dstChannelPath/nixexprs.tar.bz2") == 0 or die "cannot download `$nixexprsURL'";
 
 
 # Read the manifest.
 my (%narFiles, %patches);
-readManifest($srcManifest, \%narFiles, \%patches);
+readManifest("$dstChannelPath/MANIFEST", \%narFiles, \%patches);
 
 %patches = (); # not supported yet
 
@@ -101,44 +65,36 @@ while (my ($storePath, $files) = each %narFiles) {
         my $dstURL = "$narURL/$dstName";
         
         $file->{url} = $dstURL;
-        if (! -e $dstFile) {
+	if (! -e $dstFile) {
             print "downloading $srcURL\n";
             my $dstFileTmp = "$narPath/.tmp.$$.nar.$dstName";
             system("$curl '$srcURL' > $dstFileTmp") == 0 or die "failed to download `$srcURL'";
 
             # Verify whether the downloaded file is a bzipped NAR file
             # that matches the NAR hash given in the manifest.
-            system("bunzip2 < $dstFileTmp > $tmpDir/out") == 0 or die "downloaded file is not a bzip2 file!";
-            my $hash = `nix-hash --type sha256 --flat $tmpDir/out`;
+            my $hash = `bunzip2 < $dstFileTmp | nix-hash --type sha256 --flat /dev/stdin` or die;
             chomp $hash;
             die "hash mismatch in downloaded file `$srcURL'" if "sha256:$hash" ne $file->{narHash};
 
             rename($dstFileTmp, $dstFile) or die "cannot rename $dstFileTmp";
         }
 
-        my $old = $knownURLs{$dstURL};
+	$file->{size} = stat($dstFile)->size or die "cannot get size of $dstFile";
 
-        if (defined $old) {
-            $file->{size} = $old->{size};
-            $file->{hash} = $old->{hash};
-        } else {
-            $file->{size} = stat($dstFile)->size or die "cannot get size of $dstFile";
-
-            my $hashFile = "$narPath/.hash.$dstName";
-            my $hash;
-            if (-e $hashFile) {
-                open HASH, "<$hashFile" or die;
-                $hash = <HASH>;
-                close HASH;
-            } else {
-                $hash = `nix-hash --flat --type sha256 --base32 '$dstFile'` or die;
-                chomp $hash;
-                open HASH, ">$hashFile" or die;
-                print HASH $hash;
-                close HASH;
-            }
-            $file->{hash} = "sha256:$hash";
-        }
+	my $hashFile = "$narPath/.hash.$dstName";
+	my $hash;
+	if (-e $hashFile) {
+	    open HASH, "<$hashFile" or die;
+	    $hash = <HASH>;
+	    close HASH;
+	} else {
+	    $hash = `nix-hash --flat --type sha256 --base32 '$dstFile'` or die;
+	    chomp $hash;
+	    open HASH, ">$hashFile" or die;
+	    print HASH $hash;
+	    close HASH;
+	}
+	$file->{hash} = "sha256:$hash";
     }
 }
 
@@ -148,62 +104,11 @@ while (my ($storePath, $files) = each %narFiles) {
 # generated in the past, so that patches are not lost if (for
 # instance) a package temporarily disappears from the source channel,
 # or if multiple instances of this script are running concurrently.
-my (%dummy1, %dummy2, %allPatches);
-
-sub readAllPatches {
-    readManifest("$patchesPath/all-patches", \%dummy1, \%dummy2, \%allPatches)
-        if -f "$patchesPath/all-patches";
-}
-
-readAllPatches;
-
+my (%dummy, %allPatches);
+readManifest($allPatchesManifest, \%dummy, \%allPatches)
+    if $allPatchesManifest ne "" && -f $allPatchesManifest;
 propagatePatches \%allPatches, \%narFiles, \%patches;
-propagatePatches \%patchesOld, \%narFiles, \%patches; # not really needed
 
 
 # Make the temporary manifest available.
-writeManifest("$dstChannelPath/MANIFEST.tmp", \%narFiles, \%patches);
-
-rename("$dstChannelPath/MANIFEST.tmp", "$manifestPath") or die;
-rename("$dstChannelPath/MANIFEST.tmp.bz2", "$manifestPath.bz2") or die;
-
-
-# Mirror nixexprs.tar.bz2.  This should really be done atomically with updating the manifest.
-my $tmpFile = "$dstChannelPath/.tmp.$$.nixexprs.tar.bz2";
-system("$curl '$nixexprsURL' > $tmpFile") == 0 or die "cannot download `$nixexprsURL'";
-rename($tmpFile, "$dstChannelPath/nixexprs.tar.bz2") or die "cannot rename $tmpFile";
-
-
-# Release the lock on the manifest to allow the manifest to be updated
-# by other runs of this script while we're generating patches.
-flock LOCK, LOCK_UN;
-
-
-if ($enablePatches) {
-
-    # Generate patches asynchronously.  This can take a long time.
-    generatePatches(\%narFilesOld, \%narFiles, \%allPatches, \%patches,
-        $narPath, $patchesPath, $patchesURL, $tmpDir);
-
-    # Lock all-patches.
-    open PLOCK, ">$patchesPath/all-patches.lock" or die;
-    flock PLOCK, LOCK_EX;
-
-    # Update the list of all patches.  We need to reread all-patches
-    # and merge in our new patches because the file may have changed
-    # in the meantime.
-    readAllPatches;
-    copyPatches \%patches, \%allPatches;
-    writeManifest("$patchesPath/all-patches", {}, \%allPatches, 0);
-
-    # Reacquire the manifest lock.
-    flock LOCK, LOCK_EX;
-
-    # Rewrite the manifest.  We have to reread it and propagate all
-    # patches because it may have changed in the meantime.
-    readManifest($manifestPath, \%narFiles, \%patches);
-
-    propagatePatches \%allPatches, \%narFiles, \%patches;
-
-    writeManifest($manifestPath, \%narFiles, \%patches);
-}
+writeManifest("$dstChannelPath/MANIFEST", \%narFiles, \%patches);
