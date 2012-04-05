@@ -1,6 +1,6 @@
 #! /bin/sh -e
 
-releasesDir=test
+releasesDir=/data/releases/nixpkgs
 
 prev=""
 
