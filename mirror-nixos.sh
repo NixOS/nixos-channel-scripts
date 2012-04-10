@@ -1,48 +1,51 @@
 #! /bin/sh -e
 
-# This script downloads the latest NixOS ISO images from the "tested"
-# view in Hydra to $mirrorDir (http://nixos.org/releases/nixos).
-
+viewUrl=http://hydra.nixos.org/view/nixos/tested/latest-finished
+releasesDir=/data/releases/nixos
+channelLink=/data/releases/nixos/channels/nixos-unstable
 curl="curl --silent --show-error --fail"
 wget="wget --no-verbose --content-disposition"
 
-mirrorDir=/data/releases/nixos
-
-url=$($curl --head http://hydra.nixos.org/view/nixos/tested/latest | sed 's/Location: \(.*\)\r/\1/; t; d')
-
+url=$($curl --head $viewUrl | sed 's/Location: \(.*\)\r/\1/; t; d')
 if [ -z "$url" ]; then exit 1; fi
 
 echo "View page is $url"
 
 release=$($curl $url | sed 's|<h1>View.*(<tt>\(.*\)</tt>.*|\1|; t; d')
-
 if [ -z "$release" ]; then echo "Failed to get release"; exit 1; fi
 
 echo "Release is $release"
 
-releaseDir=$mirrorDir/$release
+releaseDir=$releasesDir/$release
+echo $releaseDir
 
 if [ -d $releaseDir ]; then
     echo "Release already exists"
 else
-
-    tmpDir=$mirrorDir/.tmp-$release-$$
+    tmpDir=$releasesDir/.tmp-$release-$$
     mkdir -p $tmpDir
 
-    $wget --directory=$tmpDir $url/tarball/download
-    $wget --directory=$tmpDir $url/iso_minimal-i686-linux/download
-    $wget --directory=$tmpDir $url/iso_minimal-x86_64-linux/download
-    $wget --directory=$tmpDir $url/iso_graphical-i686-linux/download
-    $wget --directory=$tmpDir $url/iso_graphical-x86_64-linux/download
+    echo $url > $tmpDir/src-url
+
+    $wget --directory=$tmpDir $url/nixos.iso_minimal-i686-linux/download
+    $wget --directory=$tmpDir $url/nixos.iso_minimal-x86_64-linux/download
+    $wget --directory=$tmpDir $url/nixos.iso_graphical-i686-linux/download
+    $wget --directory=$tmpDir $url/nixos.iso_graphical-x86_64-linux/download
+
+    perl -w ./mirror-channel.pl "$url/eval/channel" "$tmpDir" \
+	/data/releases/nars http://nixos.org/releases/nars \
+	/data/releases/patches/all-patches "$url/nixos.channel/download/1"
 
     mv $tmpDir $releaseDir
-
 fi
 
-#ln -sfn $release $mirrorDir/latest
+htaccess=$(dirname $channelLink)/.htaccess
+echo "Redirect /releases/nixos/channels/nixos-unstable http://nixos.org/releases/nixos/$release" > $htaccess.tmp
+ln -sfn $releaseDir $channelLink # dummy symlink
+mv $htaccess.tmp $htaccess
 
-# Generate a .htaccess with some symbolic redirects to the latest version.
-htaccess=$mirrorDir/.htaccess
+# Generate a .htaccess with some symbolic redirects to the latest ISOs.
+htaccess=$releasesDir/.htaccess
 
 echo "Redirect /releases/nixos/latest http://nixos.org/releases/nixos/$release" > $htaccess.tmp
 fn=$(cd $releaseDir && echo nixos-minimal-*-i686-linux.iso)
