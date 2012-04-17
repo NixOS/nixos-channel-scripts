@@ -11,7 +11,7 @@ if [ -z "$url" ]; then exit 1; fi
 
 echo "View page is $url"
 
-release=$($curl $url | sed 's|<h1>View.*(<tt>\(.*\)</tt>.*|\1|; t; d')
+release=$($curl $url | sed 's|.*<h1>View.*(<tt>\(.*\)</tt>.*|\1|; t; d')
 if [ -z "$release" ]; then echo "Failed to get release"; exit 1; fi
 
 echo "Release is $release"
