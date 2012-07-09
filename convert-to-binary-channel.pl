@@ -1,3 +1,5 @@
+#! /var/run/current-system/sw/bin/perl -w
+
 use strict;
 use Nix::Manifest;
 use File::Basename;
@@ -6,23 +8,25 @@ my $cacheDir = "/data/releases/binary-cache";
 
 my @manifests = split " ", `find /data/releases/{nixos,nixpkgs,nix,patchelf} -name MANIFEST | grep -v '.tmp' | sort`;
 die if $? != 0;
-#my @manifests = ("/data/releases/nix/nix-0.11/MANIFEST");
+#my @manifests = ("/data/releases/nixpkgs/nixpkgs-0.5/MANIFEST");
 #my @manifests = ("/data/releases/nixpkgs/nixpkgs-1.0pre19955_f823b62/MANIFEST");
 
 foreach my $manifest (@manifests) {
-    print STDERR "processing $manifest...\n";
     my %narFiles;
     my %patches;
-    next if readManifest($manifest, \%narFiles, \%patches, 1) < 3;
-    print STDERR "  ", scalar(keys(%narFiles)), " paths\n";
+    if (readManifest($manifest, \%narFiles, \%patches, 1) < 3) {
+	print STDERR "warning: skipping old manifest $manifest\n";
+	next;
+    }
+    print STDERR "processing $manifest (", scalar(keys(%narFiles)), " paths)...\n";
 
     while (my ($storePath, $nars) = each %narFiles) {
-	print STDERR "  $storePath\n";
 	my $pathHash = substr(basename($storePath), 0, 32);
 	my $dst = "$cacheDir/$pathHash.narinfo";
 
 	foreach my $nar (@{$nars}) {
 	    if (! -e $dst) {
+		print STDERR "  $storePath\n";
 		#print STDERR "    $nar->{url} -> $dst\n";
 
 		my $fileName = "/data/releases/nars/" . basename $nar->{url};
