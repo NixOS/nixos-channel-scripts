@@ -6,6 +6,13 @@ use File::Basename;
 
 my $cacheDir = "/data/releases/binary-cache";
 
+if (! -e "$cacheDir/nix-cache-info") {
+    open FILE, ">$cacheDir/nix-cache-info" or die;
+    print FILE "StoreDir: /nix/store\n";
+    print FILE "WantMassQuery: 1\n";
+    close FILE;
+}
+
 my @manifests = split " ", `find /data/releases/{nixos,nixpkgs,nix,patchelf} -name MANIFEST | grep -v '.tmp' | sort`;
 die if $? != 0;
 #my @manifests = ("/data/releases/nixpkgs/nixpkgs-0.5/MANIFEST");
