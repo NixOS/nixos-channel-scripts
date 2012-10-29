@@ -37,6 +37,12 @@ system("$curl '$srcChannelURL/MANIFEST' > $dstChannelPath/MANIFEST") == 0 or die
 system("$curl '$nixexprsURL' > $dstChannelPath/nixexprs.tar.bz2") == 0 or die "cannot download `$nixexprsURL'";
 
 
+# Advertise a binary cache.
+open FILE, ">$dstChannelPath/binary-cache-url" or die;
+print FILE "http://nixos.org/binary-cache/" or die;
+close FILE or die;
+
+
 # Read the manifest.
 my (%narFiles, %patches);
 readManifest("$dstChannelPath/MANIFEST", \%narFiles, \%patches);
