@@ -2,7 +2,8 @@
 
 viewUrl=http://hydra.nixos.org/view/nixpkgs/unstable/latest-finished
 releasesDir=/data/releases/nixpkgs
-channelLink=/data/releases/nixpkgs/channels/nixpkgs-unstable
+channelsDir=/data/releases/channels
+channelName=nixpkgs-unstable
 curl="curl --silent --show-error --fail"
 
 url=$($curl --head $viewUrl | sed 's/Location: \(.*\)\r/\1/; t; d')
@@ -33,7 +34,9 @@ else
     mv $tmpDir $releaseDir
 fi
 
-htaccess=$(dirname $channelLink)/.htaccess
-echo "Redirect /releases/nixpkgs/channels/nixpkgs-unstable http://nixos.org/releases/nixpkgs/$release" > $htaccess.tmp
-ln -sfn $releaseDir $channelLink # dummy symlink
+htaccess=$channelsDir/.htaccess-nixpkgs
+echo "Redirect /channels/$channelName http://nixos.org/releases/nixpkgs/$release" > $htaccess.tmp
+echo "Redirect /releases/nixpkgs/channels/$channelName http://nixos.org/releases/nixpkgs/$release" >> $htaccess.tmp
+ln -sfn $releaseDir $channelsDir/$channelName # dummy symlink
 mv $htaccess.tmp $htaccess
+flock -x $channelsDir/.htaccess.lock -c "cat $channelsDir/.htaccess-nix* > $channelsDir/.htaccess"

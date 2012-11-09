@@ -2,7 +2,8 @@
 
 viewUrl=http://hydra.nixos.org/view/nixos/tested/latest-finished
 releasesDir=/data/releases/nixos
-channelLink=/data/releases/nixos/channels/nixos-unstable
+channelsDir=/data/releases/channels
+channelName=nixos-unstable
 curl="curl --silent --show-error --fail"
 wget="wget --no-verbose --content-disposition"
 
@@ -39,10 +40,12 @@ else
     mv $tmpDir $releaseDir
 fi
 
-htaccess=$(dirname $channelLink)/.htaccess
-echo "Redirect /releases/nixos/channels/nixos-unstable http://nixos.org/releases/nixos/$release" > $htaccess.tmp
-ln -sfn $releaseDir $channelLink # dummy symlink
+htaccess=$channelsDir/.htaccess-nixos
+echo "Redirect /channels/$channelName http://nixos.org/releases/nixos/$release" > $htaccess.tmp
+echo "Redirect /releases/nixos/channels/$channelName http://nixos.org/releases/nixos/$release" >> $htaccess.tmp
+ln -sfn $releaseDir $channelsDir/$channelName # dummy symlink
 mv $htaccess.tmp $htaccess
+flock -x $channelsDir/.htaccess.lock -c "cat $channelsDir/.htaccess-nix* > $channelsDir/.htaccess"
 
 # Generate a .htaccess with some symbolic redirects to the latest ISOs.
 htaccess=$releasesDir/.htaccess
