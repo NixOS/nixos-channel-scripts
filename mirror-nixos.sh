@@ -34,7 +34,7 @@ else
     $wget --directory=$tmpDir $url/nixos.iso_graphical-x86_64-linux/download
 
     perl -w ./mirror-channel.pl "$url/eval/channel" "$tmpDir" \
-	/data/releases/nars http://nixos.org/releases/nars \
+	/data/releases/binary-cache http://nixos.org/binary-cache \
 	/data/releases/patches/all-patches "$url/nixos.channel/download/1"
 
     mv $tmpDir $releaseDir

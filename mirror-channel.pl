@@ -5,6 +5,7 @@
 use strict;
 use Nix::Manifest;
 use Nix::GeneratePatches;
+use Nix::Utils;
 use File::Basename;
 use File::stat;
 
@@ -14,19 +15,20 @@ if (scalar @ARGV < 4 || scalar @ARGV > 6) {
     exit 1;
 }
 
-my $curl = "curl --location --no-progress-bar --show-error --fail";
+my $curl = "curl --location --silent --show-error --fail";
 
 my $srcChannelURL = $ARGV[0];
 my $dstChannelPath = $ARGV[1];
-my $narPath = $ARGV[2];
-my $narURL = $ARGV[3];
+my $cacheDir = $ARGV[2];
+my $cacheURL = $ARGV[3];
 my $allPatchesManifest = $ARGV[4] || "";
 my $nixexprsURL = $ARGV[5] || "$srcChannelURL/nixexprs.tar.bz2";
 
 die "$dstChannelPath doesn't exist\n" unless -d $dstChannelPath;
-die "$narPath doesn't exist\n" unless -d $narPath;
+die "$cacheDir doesn't exist\n" unless -d $cacheDir;
 
 my $manifestPath = "$dstChannelPath/MANIFEST";
+my $narDir = "$cacheDir/nar";
 
 
 # Fetch the manifest.
@@ -50,7 +52,7 @@ readManifest("$dstChannelPath/MANIFEST", \%narFiles, \%patches);
 %patches = (); # not supported yet
 
 my $size = scalar (keys %narFiles);
-print "$size store paths in manifest\n";
+print STDERR "$size store paths in manifest\n";
 
 
 # Protect against Hydra problems that leave the channel empty.
@@ -61,46 +63,65 @@ die "cowardly refusing to mirror an empty channel" if $size == 0;
 # to point to the mirror.  Also fill in the size and hash fields in
 # the manifest in order to be compatible with Nix < 0.13.
 
-while (my ($storePath, $files) = each %narFiles) {
-    foreach my $file (@{$files}) {
-        my $narHash = $file->{narHash};
-        my $srcURL = $file->{url};
-        my $dstName = $narHash;
-        $dstName =~ s/:/_/; # `:' in filenames might cause problems
-        my $dstFile = "$narPath/$dstName";
-        my $dstURL = "$narURL/$dstName";
-        
-        $file->{url} = $dstURL;
-	if (! -e $dstFile) {
-            print "downloading $srcURL\n";
-            my $dstFileTmp = "$narPath/.tmp.$$.nar.$dstName";
-            system("$curl '$srcURL' > $dstFileTmp") == 0 or die "failed to download `$srcURL'";
+while (my ($storePath, $nars) = each %narFiles) {
 
+    my $pathHash = substr(basename($storePath), 0, 32);
+    my $narInfoFile = "$cacheDir/$pathHash.narinfo";
+
+    foreach my $nar (@{$nars}) {
+        if (! -e $narInfoFile) {
+            my $dstFileTmp = "$narDir/.tmp.$$.nar.$nar->{narHash}";
+            print STDERR "downloading $nar->{url}\n";
+            system("$curl '$nar->{url}' > $dstFileTmp") == 0 or die "failed to download `$nar->{url}'";
+            
             # Verify whether the downloaded file is a bzipped NAR file
             # that matches the NAR hash given in the manifest.
-            my $hash = `bunzip2 < $dstFileTmp | nix-hash --type sha256 --flat /dev/stdin` or die;
-            chomp $hash;
-            die "hash mismatch in downloaded file `$srcURL'" if "sha256:$hash" ne $file->{narHash};
+            my $narHash = `bunzip2 < $dstFileTmp | nix-hash --type sha256 --flat /dev/stdin` or die;
+            chomp $narHash;
+            die "hash mismatch in downloaded file `$nar->{url}'" if "sha256:$narHash" ne $nar->{narHash};
 
-            rename($dstFileTmp, $dstFile) or die "cannot rename $dstFileTmp";
+            # Compute the hash of the compressed NAR (Hydra doesn't provide one).
+            my $fileHash = `nix-hash --flat --type sha256 --base32 '$dstFileTmp'` or die;
+            chomp $fileHash;
+            $nar->{hash} = "sha256:$fileHash";
+
+            my $dstFile = "$narDir/$fileHash.nar.bz2";
+            if (-e $dstFile) {
+                unlink($dstFileTmp) or die;
+            } else {
+                rename($dstFileTmp, $dstFile) or die "cannot rename $dstFileTmp to $dstFile";
+            }
+
+            $nar->{size} = stat($dstFile)->size;
+
+            # Write the .narinfo.
+            my $info;
+            $info .= "StorePath: $storePath\n";
+            $info .= "URL: nar/$fileHash.nar.bz2\n";
+            $info .= "Compression: bzip2\n";
+            $info .= "FileHash: $nar->{hash}\n";
+            $info .= "FileSize: $nar->{size}\n";
+            $info .= "NarHash: $nar->{narHash}\n";
+            $info .= "NarSize: $nar->{narSize}\n";
+            $info .= "References: " . join(" ", map { basename $_ } (split " ", $nar->{references})) . "\n";
+            $info .= "Deriver: " . basename $nar->{deriver} . "\n" if $nar->{deriver} ne "";
+            $info .= "System: $nar->{system}\n" if defined $nar->{system};
+
+            my $tmp = "$cacheDir/.tmp.$$.$pathHash.narinfo";
+            open INFO, ">$tmp" or die;
+            print INFO "$info" or die;
+            close INFO or die;
+            rename($tmp, $narInfoFile) or die "cannot rename $tmp to $narInfoFile: $!\n";
         }
 
-	$file->{size} = stat($dstFile)->size or die "cannot get size of $dstFile";
+        my $narInfo = parseNARInfo($storePath, readFile($narInfoFile));
+        $nar->{hash} = $narInfo->{fileHash};
+        $nar->{size} = $narInfo->{fileSize};
+        $nar->{narHash} = $narInfo->{narHash};
+        $nar->{narSize} = $narInfo->{narSize};
+        $nar->{url} = "$cacheURL/$narInfo->{url}";
 
-	my $hashFile = "$narPath/.hash.$dstName";
-	my $hash;
-	if (-e $hashFile) {
-	    open HASH, "<$hashFile" or die;
-	    $hash = <HASH>;
-	    close HASH;
-	} else {
-	    $hash = `nix-hash --flat --type sha256 --base32 '$dstFile'` or die;
-	    chomp $hash;
-	    open HASH, ">$hashFile" or die;
-	    print HASH $hash;
-	    close HASH;
-	}
-	$file->{hash} = "sha256:$hash";
+	warn "archive `$cacheDir/$narInfo->{url}' has gone missing!\n" unless -f "$cacheDir/$narInfo->{url}";
     }
 }
 

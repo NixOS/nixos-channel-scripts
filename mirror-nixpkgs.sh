@@ -28,7 +28,7 @@ else
     echo $url > $tmpDir/src-url
 
     perl -w ./mirror-channel.pl "$url/eval/channel" "$tmpDir" \
-	/data/releases/nars http://nixos.org/releases/nars \
+	/data/releases/binary-cache http://nixos.org/binary-cache \
 	/data/releases/patches/all-patches "$url/tarball/download/4"
 
     mv $tmpDir $releaseDir
