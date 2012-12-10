@@ -52,7 +52,5 @@ foreach my $archive (keys %readcache::archives) {
     if (!defined $usedFiles{$archive}) {
 	my $file = $readcache::archives{$archive};
         print "$file\n";
-	my $hashFile = dirname($file) . "/.hash." . basename($file);
-	print "$hashFile\n" if -e $hashFile;
     }
 }
