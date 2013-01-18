@@ -59,11 +59,22 @@ print STDERR "$size store paths in manifest\n";
 die "cowardly refusing to mirror an empty channel" if $size == 0;
 
 
+sub permute {
+    my @list = @_;
+    for (my $n = scalar @list - 1; $n > 0; $n--) {
+        my $k = int(rand($n + 1)); # 0 <= $k <= $n 
+        @list[$n, $k] = @list[$k, $n];
+    }
+    return @list;
+}
+
+
 # Download every file that we don't already have, and update every URL
 # to point to the mirror.  Also fill in the size and hash fields in
 # the manifest in order to be compatible with Nix < 0.13.
 
-while (my ($storePath, $nars) = each %narFiles) {
+foreach my $storePath (permute(keys %narFiles)) {
+    my $nars = $narFiles{$storePath};
 
     my $pathHash = substr(basename($storePath), 0, 32);
     my $narInfoFile = "$cacheDir/$pathHash.narinfo";
