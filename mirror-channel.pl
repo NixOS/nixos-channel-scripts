@@ -22,7 +22,7 @@ my $dstChannelPath = $ARGV[1];
 my $cacheDir = $ARGV[2];
 my $cacheURL = $ARGV[3];
 my $allPatchesManifest = $ARGV[4] || "";
-my $nixexprsURL = $ARGV[5] || "$srcChannelURL/nixexprs.tar.bz2";
+my $nixexprsURL = $ARGV[5] || "$srcChannelURL/nixexprs.tar.xz";
 
 die "$dstChannelPath doesn't exist\n" unless -d $dstChannelPath;
 die "$cacheDir doesn't exist\n" unless -d $cacheDir;
@@ -35,8 +35,12 @@ my $narDir = "$cacheDir/nar";
 system("$curl '$srcChannelURL/MANIFEST' > $dstChannelPath/MANIFEST") == 0 or die;
 
 
-# Mirror nixexprs.tar.bz2.
-system("$curl '$nixexprsURL' > $dstChannelPath/nixexprs.tar.bz2") == 0 or die "cannot download `$nixexprsURL'";
+# Mirror nixexprs.tar.xz.
+system("$curl '$nixexprsURL' > $dstChannelPath/nixexprs.tar.xz") == 0 or die "cannot download `$nixexprsURL'";
+
+
+# Generate nixexprs.tar.bz2 for backwards compatibility.
+system("xz -d < $dstChannelPath/nixexprs.tar.xz | bzip2 > $dstChannelPath/nixexprs.tar.bz2") == 0 or die "cannot recompress nixexprs.tar";
 
 
 # Advertise a binary cache.
