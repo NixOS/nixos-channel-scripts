@@ -37,6 +37,14 @@ else
 	/data/releases/binary-cache http://nixos.org/binary-cache \
 	/data/releases/patches/all-patches "$url/nixos.channel/download/1"
 
+    # Generate the programs.sqlite database and put it in nixexprs.tar.xz.
+    mkdir $tmpDir/unpack
+    tar xfJ $tmpDir/nixexprs.tar.xz -C $tmpDir/unpack
+    exprDir=$(echo $tmpDir/unpack/*)
+    ./generate-programs-index.pl "$exprDir" "$exprDir/programs.sqlite"
+    tar cfJ $tmpDir/nixexprs.tar.xz -C $tmpDir/unpack "$(basename "$exprDir")"
+    rm -rf $tmpDir/unpack
+
     mv $tmpDir $releaseDir
 fi
 
