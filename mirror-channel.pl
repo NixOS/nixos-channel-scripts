@@ -6,6 +6,7 @@ use strict;
 use Nix::Manifest;
 use Nix::GeneratePatches;
 use Nix::Utils;
+use Nix::Store;
 use File::Basename;
 use File::stat;
 
@@ -22,7 +23,7 @@ my $dstChannelPath = $ARGV[1];
 my $cacheDir = $ARGV[2];
 my $cacheURL = $ARGV[3];
 my $allPatchesManifest = $ARGV[4] || "";
-my $nixexprsURL = $ARGV[5] || "$srcChannelURL/nixexprs.tar.xz";
+my $nixexprsURL = $ARGV[5];
 
 die "$dstChannelPath doesn't exist\n" unless -d $dstChannelPath;
 die "$cacheDir doesn't exist\n" unless -d $cacheDir;
@@ -35,12 +36,13 @@ my $narDir = "$cacheDir/nar";
 system("$curl '$srcChannelURL/MANIFEST' > $dstChannelPath/MANIFEST") == 0 or die;
 
 
-# Mirror nixexprs.tar.xz.
-system("$curl '$nixexprsURL' > $dstChannelPath/nixexprs.tar.xz") == 0 or die "cannot download `$nixexprsURL'";
+if (defined $nixexprsURL) {
+    # Mirror nixexprs.tar.xz.
+    system("$curl '$nixexprsURL' > $dstChannelPath/nixexprs.tar.xz") == 0 or die "cannot download `$nixexprsURL'";
 
-
-# Generate nixexprs.tar.bz2 for backwards compatibility.
-system("xz -d < $dstChannelPath/nixexprs.tar.xz | bzip2 > $dstChannelPath/nixexprs.tar.bz2") == 0 or die "cannot recompress nixexprs.tar";
+    # Generate nixexprs.tar.bz2 for backwards compatibility.
+    system("xz -d < $dstChannelPath/nixexprs.tar.xz | bzip2 > $dstChannelPath/nixexprs.tar.bz2") == 0 or die "cannot recompress nixexprs.tar";
+}
 
 
 # Advertise a binary cache.
@@ -73,6 +75,13 @@ sub permute {
 }
 
 
+sub queryPathHash16 {
+    my ($storePath) = @_;
+    my ($deriver, $narHash, $time, $narSize, $refs) = queryPathInfo($storePath, 0);
+    return $narHash;
+}
+
+
 # Download every file that we don't already have, and update every URL
 # to point to the mirror.  Also fill in the size and hash fields in
 # the manifest in order to be compatible with Nix < 0.13.
@@ -86,15 +95,25 @@ foreach my $storePath (permute(keys %narFiles)) {
     foreach my $nar (@{$nars}) {
         if (! -e $narInfoFile) {
             my $dstFileTmp = "$narDir/.tmp.$$.nar.$nar->{narHash}";
-            print STDERR "downloading $nar->{url}\n";
-            system("$curl '$nar->{url}' > $dstFileTmp") == 0 or die "failed to download `$nar->{url}'";
-            
-            # Verify whether the downloaded file is a bzipped NAR file
-            # that matches the NAR hash given in the manifest.
-            my $narHash = `bunzip2 < $dstFileTmp | nix-hash --type sha256 --flat /dev/stdin` or die;
-            chomp $narHash;
-            die "hash mismatch in downloaded file `$nar->{url}'" if "sha256:$narHash" ne $nar->{narHash};
 
+            if (isValidPath($storePath) && queryPathHash16($storePath) eq $nar->{narHash}) {
+		print STDERR "copying $storePath instead of downloading $nar->{url}\n";
+
+		# Verify that $storePath hasn't been corrupted.
+		my $narHash = `bash -c 'exec 4>&1; nix-store --dump $storePath | tee >(nix-hash --type sha256 --flat /dev/stdin >&4) | bzip2 > $dstFileTmp'`;
+		chomp $narHash;
+		die "hash mismatch in `$storePath'" if "sha256:$narHash" ne $nar->{narHash};
+	    } else {
+		print STDERR "downloading $nar->{url}\n";
+		system("$curl '$nar->{url}' > $dstFileTmp") == 0 or die "failed to download `$nar->{url}'";
+
+		# Verify whether the downloaded file is a bzipped NAR file
+		# that matches the NAR hash given in the manifest.
+		my $narHash = `bunzip2 < $dstFileTmp | nix-hash --type sha256 --flat /dev/stdin` or die;
+		chomp $narHash;
+		die "hash mismatch in downloaded file `$nar->{url}'" if "sha256:$narHash" ne $nar->{narHash};
+	    }
+            
             # Compute the hash of the compressed NAR (Hydra doesn't provide one).
             my $fileHash = `nix-hash --flat --type sha256 --base32 '$dstFileTmp'` or die;
             chomp $fileHash;
