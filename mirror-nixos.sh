@@ -28,10 +28,10 @@ else
 
     echo $url > $tmpDir/src-url
 
-    $wget --directory=$tmpDir $url/nixos.iso_minimal-i686-linux/download
-    $wget --directory=$tmpDir $url/nixos.iso_minimal-x86_64-linux/download
-    $wget --directory=$tmpDir $url/nixos.iso_graphical-i686-linux/download
-    $wget --directory=$tmpDir $url/nixos.iso_graphical-x86_64-linux/download
+    $wget --directory=$tmpDir $url/nixos.iso_minimal.i686-linux/download
+    $wget --directory=$tmpDir $url/nixos.iso_minimal.x86_64-linux/download
+    $wget --directory=$tmpDir $url/nixos.iso_graphical.i686-linux/download
+    $wget --directory=$tmpDir $url/nixos.iso_graphical.x86_64-linux/download
 
     perl -w ./mirror-channel.pl "$url/eval/channel" "$tmpDir" \
 	/data/releases/binary-cache http://nixos.org/binary-cache \
