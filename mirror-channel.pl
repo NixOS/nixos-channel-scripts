@@ -95,31 +95,34 @@ foreach my $storePath (permute(keys %narFiles)) {
     foreach my $nar (@{$nars}) {
         if (! -e $narInfoFile) {
             my $dstFileTmp = "$narDir/.tmp.$$.nar.$nar->{narHash}";
+            my $ext;
 
             if (isValidPath($storePath) && queryPathHash16($storePath) eq $nar->{narHash}) {
-		print STDERR "copying $storePath instead of downloading $nar->{url}\n";
+                print STDERR "copying $storePath instead of downloading $nar->{url}\n";
 
-		# Verify that $storePath hasn't been corrupted.
-		my $narHash = `bash -c 'exec 4>&1; nix-store --dump $storePath | tee >(nix-hash --type sha256 --flat /dev/stdin >&4) | bzip2 > $dstFileTmp'`;
-		chomp $narHash;
-		die "hash mismatch in `$storePath'" if "sha256:$narHash" ne $nar->{narHash};
-	    } else {
-		print STDERR "downloading $nar->{url}\n";
-		system("$curl '$nar->{url}' > $dstFileTmp") == 0 or die "failed to download `$nar->{url}'";
+                # Verify that $storePath hasn't been corrupted and compress it at the same time.
+                $ext = "xz";
+                my $narHash = `bash -c 'exec 4>&1; nix-store --dump $storePath | tee >(nix-hash --type sha256 --flat /dev/stdin >&4) | xz -7 > $dstFileTmp'`;
+                chomp $narHash;
+                die "hash mismatch in `$storePath'" if "sha256:$narHash" ne $nar->{narHash};
+            } else {
+                print STDERR "downloading $nar->{url}\n";
+                system("$curl '$nar->{url}' > $dstFileTmp") == 0 or die "failed to download `$nar->{url}'";
 
-		# Verify whether the downloaded file is a bzipped NAR file
-		# that matches the NAR hash given in the manifest.
-		my $narHash = `bunzip2 < $dstFileTmp | nix-hash --type sha256 --flat /dev/stdin` or die;
-		chomp $narHash;
-		die "hash mismatch in downloaded file `$nar->{url}'" if "sha256:$narHash" ne $nar->{narHash};
-	    }
+                # Verify whether the downloaded file is a bzipped NAR file
+                # that matches the NAR hash given in the manifest.
+                $ext = "bz2";
+                my $narHash = `bunzip2 < $dstFileTmp | nix-hash --type sha256 --flat /dev/stdin` or die;
+                chomp $narHash;
+                die "hash mismatch in downloaded file `$nar->{url}'" if "sha256:$narHash" ne $nar->{narHash};
+            }
             
             # Compute the hash of the compressed NAR (Hydra doesn't provide one).
             my $fileHash = `nix-hash --flat --type sha256 --base32 '$dstFileTmp'` or die;
             chomp $fileHash;
             $nar->{hash} = "sha256:$fileHash";
 
-            my $dstFile = "$narDir/$fileHash.nar.bz2";
+            my $dstFile = "$narDir/$fileHash.nar.$ext";
             if (-e $dstFile) {
                 unlink($dstFileTmp) or die;
             } else {
@@ -131,8 +134,8 @@ foreach my $storePath (permute(keys %narFiles)) {
             # Write the .narinfo.
             my $info;
             $info .= "StorePath: $storePath\n";
-            $info .= "URL: nar/$fileHash.nar.bz2\n";
-            $info .= "Compression: bzip2\n";
+            $info .= "URL: nar/$fileHash.nar.$ext\n";
+            $info .= "Compression: " . ($ext eq "xz" ? "xz" : "bzip2") . "\n";
             $info .= "FileHash: $nar->{hash}\n";
             $info .= "FileSize: $nar->{size}\n";
             $info .= "NarHash: $nar->{narHash}\n";
@@ -155,7 +158,7 @@ foreach my $storePath (permute(keys %narFiles)) {
         $nar->{narSize} = $narInfo->{narSize};
         $nar->{url} = "$cacheURL/$narInfo->{url}";
 
-	warn "archive `$cacheDir/$narInfo->{url}' has gone missing!\n" unless -f "$cacheDir/$narInfo->{url}";
+        warn "archive `$cacheDir/$narInfo->{url}' has gone missing!\n" unless -f "$cacheDir/$narInfo->{url}";
     }
 }
 
