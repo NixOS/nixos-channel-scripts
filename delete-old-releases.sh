@@ -1,5 +1,7 @@
 #! /bin/sh
 
+set -e
+
 trash=/data/releases/.trash
 mkdir -p $trash
 
@@ -10,7 +12,7 @@ find /data/releases/nixos/ /data/releases/nixpkgs/ -maxdepth 1 -name ".tmp*" -mt
 done
 
 # Remove old NixOS releases. 
-find /data/releases/nixos/ -maxdepth 1 -name "nixos-*pre*" -mtime +30 | sort | while read rel; do 
+find /data/releases/nixos/ -maxdepth 1 -name "nixos-*pre*" -mtime +20 | sort | while read rel; do 
     if [ -e $rel/keep ]; then 
 	echo "keeping NixOS release $rel" >&2
 	continue
