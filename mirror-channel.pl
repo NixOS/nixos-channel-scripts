@@ -47,7 +47,7 @@ if (defined $nixexprsURL) {
 
 # Advertise a binary cache.
 open FILE, ">$dstChannelPath/binary-cache-url" or die;
-print FILE "http://nixos.org/binary-cache/" or die;
+print FILE "http://cache.nixos.org/" or die;
 close FILE or die;
 
 
