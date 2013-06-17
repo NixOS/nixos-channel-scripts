@@ -11,7 +11,7 @@ use File::Basename;
 use File::stat;
 use Net::Amazon::S3;
 use List::MoreUtils qw(part);
-use Forks::Super;
+use Forks::Super 'bg_eval';
 
 
 if (scalar @ARGV < 4 || scalar @ARGV > 6) {
@@ -45,7 +45,7 @@ my $s3 = Net::Amazon::S3->new(
       retry                 => 1,
     });
 
-my $bucket = $s3->bucket("nix-cache") or die;
+my $bucket = $s3->bucket($bucketName) or die;
 
 
 # Fetch the manifest.
@@ -103,7 +103,7 @@ sub queryPathHash16 {
 # the manifest in order to be compatible with Nix < 0.13.
 
 sub mirrorStorePath {
-    my ($storePath) = @_;
+    my ($storePath, $res) = @_;
     my $nars = $narFiles{$storePath};
     die if scalar @{$nars} != 1;
     my $nar = $$nars[0];
@@ -174,20 +174,25 @@ sub mirrorStorePath {
 
         $bucket->add_key($narInfoFile, $info) or die "failed to upload $narInfoFile to S3\n";
     }
+
+    $res->{$storePath} = $nar;
 }
 
 
 # Spawn a bunch of children to mirror paths in parallel.
 my $i = 0;
 my @filesPerProcess = part { $i++ % $nrProcesses } permute(keys %narFiles);
+my @results;
 for (my $n = 0; $n < $nrProcesses; $n++) {
-    my $pid = fork { sub => sub { mirrorStorePath($_) foreach @{$filesPerProcess[$n]}; } };
+    push @results, bg_eval { my $res = {}; mirrorStorePath($_, $res) foreach @{$filesPerProcess[$n]}; return $res; }
 }
 
-for (my $n = 0; $n < $nrProcesses; $n++) {
-    my $pid = wait;
-    die if $pid == -1;
-    die "worker process failed: $?" if $? != 0;
+
+# Get the updated NAR info from the children so we can update the manifest.
+foreach my $r (@results) {
+    while (my ($storePath, $nar) = each %$r) {
+        $narFiles{$storePath} = [$nar];
+    }
 }
 
 
