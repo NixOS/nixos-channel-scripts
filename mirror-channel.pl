@@ -110,18 +110,28 @@ sub mirrorStorePath {
     my $pathHash = substr(basename($storePath), 0, 32);
     my $narInfoFile = "$pathHash.narinfo";
 
-    print STDERR "$$: checking $narInfoFile\n";
-    my $get = $bucket->get_key_filename("$pathHash.narinfo", "GET");
+    #print STDERR "$$: checking $narInfoFile\n";
+    my $get = $bucket->get_key("$pathHash.narinfo", "GET");
     my $narInfo;
 
     if (defined $get) {
         $narInfo = parseNARInfo($storePath, $get->{value});
+
+        #if (!defined $bucket->head_key("$narInfo->{url}", "GET")) {
+        #    print STDERR "missing NAR $narInfo->{url}!\n"; 
+        #    $bucket->delete_key("$pathHash.narinfo");
+        #    goto recreate;
+        #}
+
         $nar->{hash} = $narInfo->{fileHash};
         $nar->{size} = $narInfo->{fileSize};
         $nar->{narHash} = $narInfo->{narHash};
         $nar->{narSize} = $narInfo->{narSize};
+        $nar->{compressionType} = $narInfo->{compression};
         $nar->{url} = "$cacheURL/$narInfo->{url}";
+
     } else {
+      recreate:
         my $dstFileTmp = "/tmp/nar.$$";
         my $ext;
 
