@@ -32,11 +32,12 @@ foreach my $storePath (keys %narFiles) {
         die unless defined $basename;
         #print STDERR "GOT $basename\n";
         $usedFiles{$basename} = 1;
-	die "$storePath does not have a file hash" unless defined $file->{hash};
-	if ($file->{hash} =~ /sha256:(.+)/) {
-	    die unless length($1) == 52;
-	    $usedFiles{"$1.nar.bz2"} = 1;
-	}
+        die "$storePath does not have a file hash" unless defined $file->{hash};
+        if ($file->{hash} =~ /sha256:(.+)/) {
+            die unless length($1) == 52;
+            $usedFiles{"$1.nar.bz2"} = 1;
+            $usedFiles{"$1.nar.xz"} = 1;
+        }
         #print STDERR "missing archive `$basename'\n"
         #    unless defined $readcache::archives{$basename};
     }
@@ -59,12 +60,12 @@ sub checkDir {
     my ($dir) = @_;
     opendir(DIR, "$dir") or die "cannot open `$dir': $!";
     while (readdir DIR) {
-        next unless $_ =~ /^sha256_/ || $_ =~ /\.nar-bsdiff$/ || $_ =~ /\.nar\.bz2$/;
-	if (!defined $usedFiles{$_}) {
-	    print "$dir/$_\n";
-	} else {
-	    #print STDERR "keeping $dir/$_\n";
-	}
+        next unless $_ =~ /^sha256_/ || $_ =~ /\.nar-bsdiff$/ || $_ =~ /\.nar\.bz2$/ || $_ =~ /\.nar\.xz$/;
+        if (!defined $usedFiles{$_}) {
+            print "$dir/$_\n";
+        } else {
+            #print STDERR "keeping $dir/$_\n";
+        }
 
     }
     closedir DIR;
@@ -80,9 +81,9 @@ while (readdir DIR) {
     next unless /^(.*)\.narinfo$/;
     my $hashPart = $1;
     if (!defined $hashParts{$hashPart}) {
-	print "$cacheDir/$_\n";
+        print "$cacheDir/$_\n";
     } else {
-	#print STDERR "keeping $cacheDir/$_\n";
+        #print STDERR "keeping $cacheDir/$_\n";
     }
 }
 closedir DIR;
