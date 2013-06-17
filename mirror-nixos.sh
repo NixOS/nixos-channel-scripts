@@ -34,8 +34,8 @@ else
     $wget --directory=$tmpDir $url/nixos.iso_graphical.x86_64-linux/download
 
     perl -w ./mirror-channel.pl "$url/eval/channel" "$tmpDir" \
-	/data/releases/binary-cache http://nixos.org/binary-cache \
-	/data/releases/patches/all-patches "$url/nixos.channel/download/1"
+        nix-cache http://cache.nixos.org \
+        /data/releases/patches/all-patches "$url/nixos.channel/download/1"
 
     # Generate the programs.sqlite database and put it in nixexprs.tar.xz.
     mkdir $tmpDir/unpack
@@ -53,7 +53,6 @@ echo "Redirect /channels/$channelName http://nixos.org/releases/nixos/$release" 
 echo "Redirect /releases/nixos/channels/$channelName http://nixos.org/releases/nixos/$release" >> $htaccess.tmp
 ln -sfn $releaseDir $channelsDir/$channelName # dummy symlink
 mv $htaccess.tmp $htaccess
-flock -x $channelsDir/.htaccess.lock -c "cat $channelsDir/.htaccess-nix* > $channelsDir/.htaccess"
 
 # Generate a .htaccess with some symbolic redirects to the latest ISOs.
 htaccess=$releasesDir/.htaccess
@@ -69,3 +68,9 @@ fn=$(cd $releaseDir && echo nixos-graphical-*-x86_64-linux.iso)
 echo "Redirect /releases/nixos/latest-iso-graphical-x86_64-linux http://nixos.org/releases/nixos/$release/$fn" >> $htaccess.tmp
 
 mv $htaccess.tmp $htaccess
+
+# Copy over to nixos.org
+cd /data/releases
+rsync -avR nixos hydra-mirror@nixos.org:/data/releases --exclude nixos/.htaccess --delete
+rsync -avR channels/.htaccess-nixos channels/nixos-unstable hydra-mirror@nixos.org:/data/releases
+ssh nixos.org "flock -x $channelsDir/.htaccess.lock -c \"cat $channelsDir/.htaccess-nix* > $channelsDir/.htaccess\""

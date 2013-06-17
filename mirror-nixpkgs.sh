@@ -28,8 +28,8 @@ else
     echo $url > $tmpDir/src-url
 
     perl -w ./mirror-channel.pl "$url/eval/channel" "$tmpDir" \
-	/data/releases/binary-cache http://nixos.org/binary-cache \
-	/data/releases/patches/all-patches "$url/tarball/download/4"
+        nix-cache http://cache.nixos.org \
+        /data/releases/patches/all-patches "$url/tarball/download/4"
 
     mv $tmpDir $releaseDir
 fi
@@ -39,4 +39,9 @@ echo "Redirect /channels/$channelName http://nixos.org/releases/nixpkgs/$release
 echo "Redirect /releases/nixpkgs/channels/$channelName http://nixos.org/releases/nixpkgs/$release" >> $htaccess.tmp
 ln -sfn $releaseDir $channelsDir/$channelName # dummy symlink
 mv $htaccess.tmp $htaccess
-flock -x $channelsDir/.htaccess.lock -c "cat $channelsDir/.htaccess-nix* > $channelsDir/.htaccess"
+
+# Copy over to nixos.org
+cd /data/releases
+rsync -avR nixpkgs hydra-mirror@nixos.org:/data/releases --exclude nixpkgs/.htaccess --delete
+rsync -avR channels/.htaccess-nixpkgs channels/nixpkgs-unstable hydra-mirror@nixos.org:/data/releases
+ssh nixos.org "flock -x $channelsDir/.htaccess.lock -c \"cat $channelsDir/.htaccess-nix* > $channelsDir/.htaccess\""
