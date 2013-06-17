@@ -9,10 +9,11 @@ use Nix::Utils;
 use Nix::Store;
 use File::Basename;
 use File::stat;
+use Net::Amazon::S3;
 
 
 if (scalar @ARGV < 4 || scalar @ARGV > 6) {
-    print STDERR "Syntax: perl mirror-channel.pl <src-channel-url> <dst-channel-dir> <nar-dir> <nar-url> [<all-patches-manifest [<nix-exprs-url>]]\n";
+    print STDERR "Syntax: perl mirror-channel.pl <src-channel-url> <dst-channel-dir> <bucket-name> <nar-url> [<all-patches-manifest [<nix-exprs-url>]]\n";
     exit 1;
 }
 
@@ -20,16 +21,27 @@ my $curl = "curl --location --silent --show-error --fail";
 
 my $srcChannelURL = $ARGV[0];
 my $dstChannelPath = $ARGV[1];
-my $cacheDir = $ARGV[2];
-my $cacheURL = $ARGV[3];
+my $bucketName = $ARGV[2];
+my $cacheURL = $ARGV[3]; die if $cacheURL =~ /\/$/;
 my $allPatchesManifest = $ARGV[4] || "";
 my $nixexprsURL = $ARGV[5];
 
 die "$dstChannelPath doesn't exist\n" unless -d $dstChannelPath;
-die "$cacheDir doesn't exist\n" unless -d $cacheDir;
 
 my $manifestPath = "$dstChannelPath/MANIFEST";
-my $narDir = "$cacheDir/nar";
+
+
+# S3 setup.
+my $aws_access_key_id = $ENV{'AWS_ACCESS_KEY_ID'} or die;
+my $aws_secret_access_key = $ENV{'AWS_SECRET_ACCESS_KEY'} or die;
+
+my $s3 = Net::Amazon::S3->new(
+    { aws_access_key_id     => $aws_access_key_id,
+      aws_secret_access_key => $aws_secret_access_key,
+      retry                 => 1,
+    });
+
+my $bucket = $s3->bucket("nix-cache") or die;
 
 
 # Fetch the manifest.
@@ -47,7 +59,7 @@ if (defined $nixexprsURL) {
 
 # Advertise a binary cache.
 open FILE, ">$dstChannelPath/binary-cache-url" or die;
-print FILE "http://cache.nixos.org/" or die;
+print FILE $cacheURL or die;
 close FILE or die;
 
 
@@ -88,77 +100,74 @@ sub queryPathHash16 {
 
 foreach my $storePath (permute(keys %narFiles)) {
     my $nars = $narFiles{$storePath};
-
+    die if scalar @{$nars} != 1;
+    my $nar = $$nars[0];
     my $pathHash = substr(basename($storePath), 0, 32);
-    my $narInfoFile = "$cacheDir/$pathHash.narinfo";
+    my $narInfoFile = "$pathHash.narinfo";
 
-    foreach my $nar (@{$nars}) {
-        if (! -e $narInfoFile) {
-            my $dstFileTmp = "$narDir/.tmp.$$.nar.$nar->{narHash}";
-            my $ext;
+    print STDERR "checking $narInfoFile\n";
+    my $get = $bucket->get_key_filename("$pathHash.narinfo", "GET");
+    my $narInfo;
 
-            if (isValidPath($storePath) && queryPathHash16($storePath) eq $nar->{narHash}) {
-                print STDERR "copying $storePath instead of downloading $nar->{url}\n";
-
-                # Verify that $storePath hasn't been corrupted and compress it at the same time.
-                $ext = "xz";
-                my $narHash = `bash -c 'exec 4>&1; nix-store --dump $storePath | tee >(nix-hash --type sha256 --flat /dev/stdin >&4) | xz -7 > $dstFileTmp'`;
-                chomp $narHash;
-                die "hash mismatch in `$storePath'" if "sha256:$narHash" ne $nar->{narHash};
-            } else {
-                print STDERR "downloading $nar->{url}\n";
-                system("$curl '$nar->{url}' > $dstFileTmp") == 0 or die "failed to download `$nar->{url}'";
-
-                # Verify whether the downloaded file is a bzipped NAR file
-                # that matches the NAR hash given in the manifest.
-                $ext = "bz2";
-                my $narHash = `bunzip2 < $dstFileTmp | nix-hash --type sha256 --flat /dev/stdin` or die;
-                chomp $narHash;
-                die "hash mismatch in downloaded file `$nar->{url}'" if "sha256:$narHash" ne $nar->{narHash};
-            }
-            
-            # Compute the hash of the compressed NAR (Hydra doesn't provide one).
-            my $fileHash = `nix-hash --flat --type sha256 --base32 '$dstFileTmp'` or die;
-            chomp $fileHash;
-            $nar->{hash} = "sha256:$fileHash";
-
-            my $dstFile = "$narDir/$fileHash.nar.$ext";
-            if (-e $dstFile) {
-                unlink($dstFileTmp) or die;
-            } else {
-                rename($dstFileTmp, $dstFile) or die "cannot rename $dstFileTmp to $dstFile";
-            }
-
-            $nar->{size} = stat($dstFile)->size;
-
-            # Write the .narinfo.
-            my $info;
-            $info .= "StorePath: $storePath\n";
-            $info .= "URL: nar/$fileHash.nar.$ext\n";
-            $info .= "Compression: " . ($ext eq "xz" ? "xz" : "bzip2") . "\n";
-            $info .= "FileHash: $nar->{hash}\n";
-            $info .= "FileSize: $nar->{size}\n";
-            $info .= "NarHash: $nar->{narHash}\n";
-            $info .= "NarSize: $nar->{narSize}\n";
-            $info .= "References: " . join(" ", map { basename $_ } (split " ", $nar->{references})) . "\n";
-            $info .= "Deriver: " . basename $nar->{deriver} . "\n" if $nar->{deriver} ne "";
-            $info .= "System: $nar->{system}\n" if defined $nar->{system};
-
-            my $tmp = "$cacheDir/.tmp.$$.$pathHash.narinfo";
-            open INFO, ">$tmp" or die;
-            print INFO "$info" or die;
-            close INFO or die;
-            rename($tmp, $narInfoFile) or die "cannot rename $tmp to $narInfoFile: $!\n";
-        }
-
-        my $narInfo = parseNARInfo($storePath, readFile($narInfoFile));
+    if (defined $get) {
+        $narInfo = parseNARInfo($storePath, $get->{value});
         $nar->{hash} = $narInfo->{fileHash};
         $nar->{size} = $narInfo->{fileSize};
         $nar->{narHash} = $narInfo->{narHash};
         $nar->{narSize} = $narInfo->{narSize};
         $nar->{url} = "$cacheURL/$narInfo->{url}";
+    } else {
+        my $dstFileTmp = "/tmp/nar";
+        my $ext;
 
-        warn "archive `$cacheDir/$narInfo->{url}' has gone missing!\n" unless -f "$cacheDir/$narInfo->{url}";
+        if (isValidPath($storePath) && queryPathHash16($storePath) eq $nar->{narHash}) {
+            print STDERR "copying $storePath instead of downloading $nar->{url}\n";
+
+            # Verify that $storePath hasn't been corrupted and compress it at the same time.
+            $ext = "xz";
+            my $narHash = `bash -c 'exec 4>&1; nix-store --dump $storePath | tee >(nix-hash --type sha256 --flat /dev/stdin >&4) | xz -7 > $dstFileTmp'`;
+            chomp $narHash;
+            die "hash mismatch in `$storePath'" if "sha256:$narHash" ne $nar->{narHash};
+        } else {
+            print STDERR "downloading $nar->{url}\n";
+            system("$curl '$nar->{url}' > $dstFileTmp") == 0 or die "failed to download `$nar->{url}'";
+
+            # Verify whether the downloaded file is a bzipped NAR file
+            # that matches the NAR hash given in the manifest.
+            $ext = "bz2";
+            my $narHash = `bunzip2 < $dstFileTmp | nix-hash --type sha256 --flat /dev/stdin` or die;
+            chomp $narHash;
+            die "hash mismatch in downloaded file `$nar->{url}'" if "sha256:$narHash" ne $nar->{narHash};
+        }
+
+        # Compute the hash of the compressed NAR (Hydra doesn't provide one).
+        my $fileHash = hashFile("sha256", 1, $dstFileTmp);
+        my $dstFile = "nar/$fileHash.nar.$ext";
+        $nar->{url} = "$cacheURL/$dstFile";
+        $nar->{hash} = "sha256:$fileHash";
+        $nar->{size} = stat($dstFileTmp)->size;
+
+        if (!defined $bucket->head_key($dstFile)) {
+            print STDERR "uploading $dstFile ($nar->{size} bytes)\n";
+            $bucket->add_key_filename($dstFile, $dstFileTmp) or die "failed to upload $dstFile to S3\n";
+        }
+
+        unlink($dstFileTmp) or die;
+
+        # Write the .narinfo.
+        my $info;
+        $info .= "StorePath: $storePath\n";
+        $info .= "URL: nar/$fileHash.nar.$ext\n";
+        $info .= "Compression: " . ($ext eq "xz" ? "xz" : "bzip2") . "\n";
+        $info .= "FileHash: $nar->{hash}\n";
+        $info .= "FileSize: $nar->{size}\n";
+        $info .= "NarHash: $nar->{narHash}\n";
+        $info .= "NarSize: $nar->{narSize}\n";
+        $info .= "References: " . join(" ", map { basename $_ } (split " ", $nar->{references})) . "\n";
+        $info .= "Deriver: " . basename $nar->{deriver} . "\n" if $nar->{deriver} ne "";
+        $info .= "System: $nar->{system}\n" if defined $nar->{system};
+
+        $bucket->add_key($narInfoFile, $info) or die "failed to upload $narInfoFile to S3\n";
     }
 }
 
