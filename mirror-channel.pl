@@ -10,6 +10,8 @@ use Nix::Store;
 use File::Basename;
 use File::stat;
 use Net::Amazon::S3;
+use List::MoreUtils qw(part);
+use Forks::Super;
 
 
 if (scalar @ARGV < 4 || scalar @ARGV > 6) {
@@ -18,6 +20,8 @@ if (scalar @ARGV < 4 || scalar @ARGV > 6) {
 }
 
 my $curl = "curl --location --silent --show-error --fail";
+
+my $nrProcesses = 8;
 
 my $srcChannelURL = $ARGV[0];
 my $dstChannelPath = $ARGV[1];
@@ -98,14 +102,15 @@ sub queryPathHash16 {
 # to point to the mirror.  Also fill in the size and hash fields in
 # the manifest in order to be compatible with Nix < 0.13.
 
-foreach my $storePath (permute(keys %narFiles)) {
+sub mirrorStorePath {
+    my ($storePath) = @_;
     my $nars = $narFiles{$storePath};
     die if scalar @{$nars} != 1;
     my $nar = $$nars[0];
     my $pathHash = substr(basename($storePath), 0, 32);
     my $narInfoFile = "$pathHash.narinfo";
 
-    print STDERR "checking $narInfoFile\n";
+    print STDERR "$$: checking $narInfoFile\n";
     my $get = $bucket->get_key_filename("$pathHash.narinfo", "GET");
     my $narInfo;
 
@@ -117,7 +122,7 @@ foreach my $storePath (permute(keys %narFiles)) {
         $nar->{narSize} = $narInfo->{narSize};
         $nar->{url} = "$cacheURL/$narInfo->{url}";
     } else {
-        my $dstFileTmp = "/tmp/nar";
+        my $dstFileTmp = "/tmp/nar.$$";
         my $ext;
 
         if (isValidPath($storePath) && queryPathHash16($storePath) eq $nar->{narHash}) {
@@ -169,6 +174,20 @@ foreach my $storePath (permute(keys %narFiles)) {
 
         $bucket->add_key($narInfoFile, $info) or die "failed to upload $narInfoFile to S3\n";
     }
+}
+
+
+# Spawn a bunch of children to mirror paths in parallel.
+my $i = 0;
+my @filesPerProcess = part { $i++ % $nrProcesses } permute(keys %narFiles);
+for (my $n = 0; $n < $nrProcesses; $n++) {
+    my $pid = fork { sub => sub { mirrorStorePath($_) foreach @{$filesPerProcess[$n]}; } };
+}
+
+for (my $n = 0; $n < $nrProcesses; $n++) {
+    my $pid = wait;
+    die if $pid == -1;
+    die "worker process failed: $?" if $? != 0;
 }
 
 
