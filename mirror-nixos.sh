@@ -72,5 +72,5 @@ mv $htaccess.tmp $htaccess
 # Copy over to nixos.org
 cd /data/releases
 rsync -avR nixos hydra-mirror@nixos.org:/data/releases --exclude nixos/.htaccess --delete
-rsync -avR channels/.htaccess-nixos channels/nixos-unstable hydra-mirror@nixos.org:/data/releases
+rsync -avR channels/.htaccess-nixos channels/nixos-unstable nixos/.htaccess hydra-mirror@nixos.org:/data/releases
 ssh nixos.org "flock -x $channelsDir/.htaccess.lock -c \"cat $channelsDir/.htaccess-nix* > $channelsDir/.htaccess\""
