@@ -1,35 +1,35 @@
 #! /bin/sh -e
 
-viewUrl=http://hydra.nixos.org/view/nixpkgs/unstable/latest-finished
+releaseUrl=http://hydra.nixos.org/job/nixpkgs/trunk/unstable/latest-finished
 releasesDir=/data/releases/nixpkgs
 channelsDir=/data/releases/channels
 channelName=nixpkgs-unstable
 curl="curl --silent --show-error --fail"
 
-url=$($curl --head $viewUrl | sed 's/Location: \(.*\)\r/\1/; t; d')
-if [ -z "$url" ]; then exit 1; fi
+json=$($curl -L -H 'Accept: application/json' $releaseUrl)
 
-echo "View page is $url"
+releaseId=$(echo "$json" | json id)
+if [ -z "$releaseId" ]; then echo "Failed to get release id"; exit 1; fi
 
-release=$($curl $url | sed 's|.*<h1>.*View \(.*\)</small.*|\1|; t; d')
+release=$(echo "$json" | json nixname)
 if [ -z "$release" ]; then echo "Failed to get release"; exit 1; fi
 
-echo "Release is $release"
+url=$($curl --head http://hydra.nixos.org/build/$releaseId/eval | sed 's/Location: \(.*\)\r/\1/; t; d')
+if [ -z "$url" ]; then exit 1; fi
 
-releaseDir=$releasesDir/$release
-echo $releaseDir
+echo "release is ‘$release’ (build $releaseId), eval is ‘$url’"
 
 if [ -d $releaseDir ]; then
-    echo "Release already exists"
+    echo "release already exists"
 else
     tmpDir=$releasesDir/.tmp-$release-$$
     mkdir -p $tmpDir
 
     echo $url > $tmpDir/src-url
 
-    perl -w ./mirror-channel.pl "$url/eval/channel" "$tmpDir" \
+    perl -w ./mirror-channel.pl "$url/channel" "$tmpDir" \
         nix-cache http://cache.nixos.org \
-        /data/releases/patches/all-patches "$url/tarball/download/4"
+        /data/releases/patches/all-patches "$url/job/tarball/download/4"
 
     mv $tmpDir $releaseDir
 fi
