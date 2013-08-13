@@ -1,41 +1,45 @@
 #! /bin/sh -e
 
-viewUrl=http://hydra.nixos.org/view/nixos/tested/latest-finished
+releaseUrl=http://hydra.nixos.org/job/nixos/trunk-combined/tested/latest-finished
 releasesDir=/data/releases/nixos
 channelsDir=/data/releases/channels
 channelName=nixos-unstable
 curl="curl --silent --show-error --fail"
 wget="wget --no-verbose --content-disposition"
 
-url=$($curl --head $viewUrl | sed 's/Location: \(.*\)\r/\1/; t; d')
-if [ -z "$url" ]; then exit 1; fi
+json=$($curl -L -H 'Accept: application/json' $releaseUrl)
 
-echo "View page is $url"
+releaseId=$(echo "$json" | json id)
+if [ -z "$releaseId" ]; then echo "Failed to get release id"; exit 1; fi
 
-release=$($curl $url | sed 's|.*<h1>.*View \(.*\)</small.*|\1|; t; d')
+release=$(echo "$json" | json nixname)
 if [ -z "$release" ]; then echo "Failed to get release"; exit 1; fi
 
-echo "Release is $release"
+url=$($curl --head http://hydra.nixos.org/build/$releaseId/eval | sed 's/Location: \(.*\)\r/\1/; t; d')
+if [ -z "$url" ]; then exit 1; fi
+
+echo "release is ‘$release’ (build $releaseId), eval is ‘$url’"
 
 releaseDir=$releasesDir/$release
 echo $releaseDir
 
 if [ -d $releaseDir ]; then
-    echo "Release already exists"
+    echo "release already exists"
 else
     tmpDir=$releasesDir/.tmp-$release-$$
     mkdir -p $tmpDir
 
     echo $url > $tmpDir/src-url
 
-    $wget --directory=$tmpDir $url/nixos.iso_minimal.i686-linux/download
-    $wget --directory=$tmpDir $url/nixos.iso_minimal.x86_64-linux/download
-    $wget --directory=$tmpDir $url/nixos.iso_graphical.i686-linux/download
-    $wget --directory=$tmpDir $url/nixos.iso_graphical.x86_64-linux/download
+    $wget --directory=$tmpDir $url/job/nixos.iso_minimal.i686-linux/download
+    $wget --directory=$tmpDir $url/job/nixos.iso_minimal.x86_64-linux/download
+    $wget --directory=$tmpDir $url/job/nixos.iso_graphical.i686-linux/download
+    $wget --directory=$tmpDir $url/job/nixos.iso_graphical.x86_64-linux/download
+    $wget --directory=$tmpDir $url/job/nixos.vdi.x86_64-linux/download
 
-    perl -w ./mirror-channel.pl "$url/eval/channel" "$tmpDir" \
+    perl -w ./mirror-channel.pl "$url/channel" "$tmpDir" \
         nix-cache http://cache.nixos.org \
-        /data/releases/patches/all-patches "$url/nixos.channel/download/1"
+        /data/releases/patches/all-patches "$url/job/nixos.channel/download/1"
 
     # Generate the programs.sqlite database and put it in nixexprs.tar.xz.
     mkdir $tmpDir/unpack
@@ -66,6 +70,8 @@ fn=$(cd $releaseDir && echo nixos-graphical-*-i686-linux.iso)
 echo "Redirect /releases/nixos/latest-iso-graphical-i686-linux http://nixos.org/releases/nixos/$release/$fn" >> $htaccess.tmp
 fn=$(cd $releaseDir && echo nixos-graphical-*-x86_64-linux.iso)
 echo "Redirect /releases/nixos/latest-iso-graphical-x86_64-linux http://nixos.org/releases/nixos/$release/$fn" >> $htaccess.tmp
+fn=$(cd $releaseDir && echo nixos-*.vdi.*)
+echo "Redirect /releases/nixos/latest-vdi-x86_64-linux http://nixos.org/releases/nixos/$release/$fn" >> $htaccess.tmp
 
 mv $htaccess.tmp $htaccess
 
