@@ -19,6 +19,8 @@ if [ -z "$url" ]; then exit 1; fi
 
 echo "release is ‘$release’ (build $releaseId), eval is ‘$url’"
 
+releaseDir=$releasesDir/$release
+
 if [ -d $releaseDir ]; then
     echo "release already exists"
 else
@@ -40,7 +42,7 @@ echo "Redirect /releases/nixpkgs/channels/$channelName http://nixos.org/releases
 ln -sfn $releaseDir $channelsDir/$channelName # dummy symlink
 mv $htaccess.tmp $htaccess
 
-# Copy over to nixos.org
+# Copy over to nixos.org.
 cd /data/releases
 rsync -avR nixpkgs hydra-mirror@nixos.org:/data/releases --exclude nixpkgs/.htaccess --delete
 rsync -avR channels/.htaccess-nixpkgs channels/nixpkgs-unstable hydra-mirror@nixos.org:/data/releases

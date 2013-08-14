@@ -21,7 +21,6 @@ if [ -z "$url" ]; then exit 1; fi
 echo "release is ‘$release’ (build $releaseId), eval is ‘$url’"
 
 releaseDir=$releasesDir/$release
-echo $releaseDir
 
 if [ -d $releaseDir ]; then
     echo "release already exists"
@@ -75,7 +74,7 @@ echo "Redirect /releases/nixos/latest-vdi-x86_64-linux http://nixos.org/releases
 
 mv $htaccess.tmp $htaccess
 
-# Copy over to nixos.org
+# Copy over to nixos.org.
 cd /data/releases
 rsync -avR nixos hydra-mirror@nixos.org:/data/releases --exclude nixos/.htaccess --delete
 rsync -avR channels/.htaccess-nixos channels/nixos-unstable nixos/.htaccess hydra-mirror@nixos.org:/data/releases
