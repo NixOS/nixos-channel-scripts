@@ -136,7 +136,7 @@ sub mirrorStorePath {
         my $ext;
 
         if (isValidPath($storePath) && queryPathHash16($storePath) eq $nar->{narHash}) {
-            print STDERR "copying $storePath instead of downloading $nar->{url}\n";
+            print STDERR "copying $storePath\n";
 
             # Verify that $storePath hasn't been corrupted and compress it at the same time.
             $ext = "xz";

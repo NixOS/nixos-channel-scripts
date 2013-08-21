@@ -17,9 +17,9 @@ if [ -z "$release" ]; then echo "Failed to get release"; exit 1; fi
 url=$($curl --head http://hydra.nixos.org/build/$releaseId/eval | sed 's/Location: \(.*\)\r/\1/; t; d')
 if [ -z "$url" ]; then exit 1; fi
 
-echo "release is ‘$release’ (build $releaseId), eval is ‘$url’"
-
 releaseDir=$releasesDir/$release
+
+echo "release is ‘$release’ (build $releaseId), eval is ‘$url’, dir is ‘$releaseDir’"
 
 if [ -d $releaseDir ]; then
     echo "release already exists"
@@ -32,6 +32,12 @@ else
     perl -w ./mirror-channel.pl "$url/channel" "$tmpDir" \
         nix-cache http://cache.nixos.org \
         /data/releases/patches/all-patches "$url/job/tarball/download/4"
+
+    # Extract the manual.
+    mkdir $tmpDir/manual
+    tar xf $tmpDir/nixexprs.tar.xz --strip-components=2 -C $tmpDir/manual \
+	--wildcards '*/doc' --exclude '*.xml' --exclude '*.xsl' --exclude '*.txt' --exclude 'Makefile'
+    ln -s manual.html $tmpDir/manual/index.html
 
     mv $tmpDir $releaseDir
 fi

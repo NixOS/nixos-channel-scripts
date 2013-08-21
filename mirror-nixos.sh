@@ -18,9 +18,9 @@ if [ -z "$release" ]; then echo "Failed to get release"; exit 1; fi
 url=$($curl --head http://hydra.nixos.org/build/$releaseId/eval | sed 's/Location: \(.*\)\r/\1/; t; d')
 if [ -z "$url" ]; then exit 1; fi
 
-echo "release is ‘$release’ (build $releaseId), eval is ‘$url’"
-
 releaseDir=$releasesDir/$release
+
+echo "release is ‘$release’ (build $releaseId), eval is ‘$url’, dir is ‘$releaseDir’"
 
 if [ -d $releaseDir ]; then
     echo "release already exists"
@@ -29,6 +29,14 @@ else
     mkdir -p $tmpDir
 
     echo $url > $tmpDir/src-url
+
+    # Copy the manual.
+    drvpath=$(curl -H 'Accept: application/json' -L $url/job/nixos.manual | json drvpath)
+    if [ -z "$drvpath" ]; then exit 1; fi
+    outpath=$(nix-store -r $drvpath)
+    cp -rd $outpath/share/doc/nixos $tmpDir/manual
+    chmod -R u+w $tmpDir/manual
+    ln -s manual.html $tmpDir/manual/index.html
 
     $wget --directory=$tmpDir $url/job/nixos.iso_minimal.i686-linux/download
     $wget --directory=$tmpDir $url/job/nixos.iso_minimal.x86_64-linux/download
