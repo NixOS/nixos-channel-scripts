@@ -31,17 +31,16 @@ else
     echo $url > $tmpDir/src-url
 
     # Copy the manual.
-    drvpath=$(curl -H 'Accept: application/json' -L $url/job/nixos.manual | json drvpath)
-    if [ -z "$drvpath" ]; then exit 1; fi
-    outpath=$(nix-store -r $drvpath)
-    cp -rd $outpath/share/doc/nixos $tmpDir/manual
-    chmod -R u+w $tmpDir/manual
+    $curl -L $url/job/nixos.manual/output/out | bzip2 -d | nix-store --restore $tmpDir/foo
+    mv $tmpDir/foo/share/doc/nixos $tmpDir/manual
+    rm -rf $tmpDir/foo
     ln -s manual.html $tmpDir/manual/index.html
 
     $wget --directory=$tmpDir $url/job/nixos.iso_minimal.i686-linux/download
     $wget --directory=$tmpDir $url/job/nixos.iso_minimal.x86_64-linux/download
     $wget --directory=$tmpDir $url/job/nixos.iso_graphical.i686-linux/download
     $wget --directory=$tmpDir $url/job/nixos.iso_graphical.x86_64-linux/download
+    $wget --directory=$tmpDir $url/job/nixos.vdi.i686-linux/download
     $wget --directory=$tmpDir $url/job/nixos.vdi.x86_64-linux/download
 
     perl -w ./mirror-channel.pl "$url/channel" "$tmpDir" \
@@ -77,7 +76,9 @@ fn=$(cd $releaseDir && echo nixos-graphical-*-i686-linux.iso)
 echo "Redirect /releases/nixos/latest-iso-graphical-i686-linux http://nixos.org/releases/nixos/$release/$fn" >> $htaccess.tmp
 fn=$(cd $releaseDir && echo nixos-graphical-*-x86_64-linux.iso)
 echo "Redirect /releases/nixos/latest-iso-graphical-x86_64-linux http://nixos.org/releases/nixos/$release/$fn" >> $htaccess.tmp
-fn=$(cd $releaseDir && echo nixos-*.vdi.*)
+fn=$(cd $releaseDir && echo nixos-*-i686-linux.vdi.*)
+echo "Redirect /releases/nixos/latest-vdi-i686-linux http://nixos.org/releases/nixos/$release/$fn" >> $htaccess.tmp
+fn=$(cd $releaseDir && echo nixos-*-x86_64-linux.vdi.*)
 echo "Redirect /releases/nixos/latest-vdi-x86_64-linux http://nixos.org/releases/nixos/$release/$fn" >> $htaccess.tmp
 
 mv $htaccess.tmp $htaccess
