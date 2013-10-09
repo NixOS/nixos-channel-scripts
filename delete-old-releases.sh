@@ -12,7 +12,7 @@ find /data/releases/nixos/ /data/releases/nixpkgs/ -maxdepth 1 -name ".tmp*" -mt
 done
 
 # Remove old NixOS releases. 
-find /data/releases/nixos/ -maxdepth 1 -name "nixos-*pre*" -mtime +20 | sort | while read rel; do 
+find /data/releases/nixos/ -maxdepth 1 -name "nixos-*pre*" -mtime +14 | sort | while read rel; do 
     if [ -e $rel/keep ]; then 
 	echo "keeping NixOS release $rel" >&2
 	continue
@@ -30,6 +30,8 @@ find /data/releases/nixpkgs/ -maxdepth 1 -name "nixpkgs-*pre*" -mtime +30 | sort
     echo "removing old Nixpkgs release $rel" >&2
     mv $rel $trash/
 done
+
+exit 0
 
 # Remove unreferenced NARs/patches (but only if they're older than 2
 # weeks, to prevent messing with binary patch generation in progress).
