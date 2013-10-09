@@ -19,10 +19,10 @@ if [ -z "$url" ]; then exit 1; fi
 
 releaseDir=$releasesDir/$release
 
-echo "release is ‘$release’ (build $releaseId), eval is ‘$url’, dir is ‘$releaseDir’"
+echo "release is ‘$release’ (build $releaseId), eval is ‘$url’, dir is ‘$releaseDir’" >&2
 
 if [ -d $releaseDir ]; then
-    echo "release already exists"
+    echo "release already exists" >&2
 else
     tmpDir=$releasesDir/.tmp-$release-$$
     mkdir -p $tmpDir
@@ -42,14 +42,18 @@ else
     mv $tmpDir $releaseDir
 fi
 
-htaccess=$channelsDir/.htaccess-nixpkgs
-echo "Redirect /channels/$channelName http://nixos.org/releases/nixpkgs/$release" > $htaccess.tmp
-echo "Redirect /releases/nixpkgs/channels/$channelName http://nixos.org/releases/nixpkgs/$release" >> $htaccess.tmp
-ln -sfn $releaseDir $channelsDir/$channelName # dummy symlink
-mv $htaccess.tmp $htaccess
-
 # Copy over to nixos.org.
-cd /data/releases
-rsync -avR nixpkgs hydra-mirror@nixos.org:/data/releases --exclude nixpkgs/.htaccess --delete
-rsync -avR channels/.htaccess-nixpkgs channels/nixpkgs-unstable hydra-mirror@nixos.org:/data/releases
-ssh nixos.org "flock -x $channelsDir/.htaccess.lock -c \"cat $channelsDir/.htaccess-nix* > $channelsDir/.htaccess\""
+cd "$releasesDir"
+rsync -avR . hydra-mirror@nixos.org:"$releasesDir" --delete >&2
+
+# Update the channel.
+htaccess=$channelsDir/.htaccess-$channelName
+echo "Redirect /channels/$channelName http://nixos.org/releases/nixpkgs/$release" > $htaccess.tmp
+echo "Redirect /releases/nixpkgs/channels/$channelName http://nixos.org/releases/nixpkgs/$release" >> $htaccess.tmp # obsolete
+mv $htaccess.tmp $htaccess
+ln -sfn $releaseDir $channelsDir/$channelName # dummy symlink
+
+flock -x $channelsDir/.htaccess.lock -c "cat $channelsDir/.htaccess-nix* > $channelsDir/.htaccess"
+
+cd "$channelsDir"
+rsync -avR . hydra-mirror@nixos.org:"$channelsDir" --delete >&2
