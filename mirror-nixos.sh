@@ -40,8 +40,8 @@ else
     $wget --directory=$tmpDir $url/job/nixos.iso_minimal.x86_64-linux/download
     $wget --directory=$tmpDir $url/job/nixos.iso_graphical.i686-linux/download
     $wget --directory=$tmpDir $url/job/nixos.iso_graphical.x86_64-linux/download
-    $wget --directory=$tmpDir $url/job/nixos.vdi.i686-linux/download
-    $wget --directory=$tmpDir $url/job/nixos.vdi.x86_64-linux/download
+    $wget --directory=$tmpDir $url/job/nixos.ova.i686-linux/download
+    $wget --directory=$tmpDir $url/job/nixos.ova.x86_64-linux/download
 
     perl -w ./mirror-channel.pl "$url/channel" "$tmpDir" \
         nix-cache http://cache.nixos.org \
@@ -76,10 +76,10 @@ fn=$(cd $releaseDir && echo nixos-graphical-*-i686-linux.iso)
 echo "Redirect /releases/nixos/latest-iso-graphical-i686-linux http://nixos.org/releases/nixos/$release/$fn" >> $htaccess.tmp
 fn=$(cd $releaseDir && echo nixos-graphical-*-x86_64-linux.iso)
 echo "Redirect /releases/nixos/latest-iso-graphical-x86_64-linux http://nixos.org/releases/nixos/$release/$fn" >> $htaccess.tmp
-fn=$(cd $releaseDir && echo nixos-*-i686-linux.vdi.*)
-echo "Redirect /releases/nixos/latest-vdi-i686-linux http://nixos.org/releases/nixos/$release/$fn" >> $htaccess.tmp
-fn=$(cd $releaseDir && echo nixos-*-x86_64-linux.vdi.*)
-echo "Redirect /releases/nixos/latest-vdi-x86_64-linux http://nixos.org/releases/nixos/$release/$fn" >> $htaccess.tmp
+fn=$(cd $releaseDir && echo nixos-*-i686-linux.ova)
+echo "Redirect /releases/nixos/latest-ova-i686-linux http://nixos.org/releases/nixos/$release/$fn" >> $htaccess.tmp
+fn=$(cd $releaseDir && echo nixos-*-x86_64-linux.ova)
+echo "Redirect /releases/nixos/latest-ova-x86_64-linux http://nixos.org/releases/nixos/$release/$fn" >> $htaccess.tmp
 
 mv $htaccess.tmp $htaccess
 
