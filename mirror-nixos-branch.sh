@@ -40,7 +40,7 @@ else
     echo $url > $tmpDir/src-url
 
     # Copy the manual.
-    $curl -L $url/job/nixos.manual/output/out | bzip2 -d | nix-store --restore $tmpDir/foo
+    $curl -L $url/job/nixos.manual.x86_64-linux/output/out | bzip2 -d | nix-store --restore $tmpDir/foo
     mv $tmpDir/foo/share/doc/nixos $tmpDir/manual
     rm -rf $tmpDir/foo
     ln -s manual.html $tmpDir/manual/index.html
