@@ -1,6 +1,8 @@
 #! /bin/sh -e
 
-version="13.10"
+version="$1"
+if [ -z "$version" ]; then echo "syntax: $0 VERSION"; exit 1; fi
+
 releaseDir=$(./mirror-nixos-branch.sh "$version" "release-$version")
 echo $releaseDir
 
