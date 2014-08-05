@@ -48,8 +48,8 @@ rsync -avR . hydra-mirror@nixos.org:"$releasesDir" --delete >&2
 
 # Update the channel.
 htaccess=$channelsDir/.htaccess-$channelName
-echo "Redirect /channels/$channelName http://releases.nixos.org/nixpkgs/$release" > $htaccess.tmp
-echo "Redirect /releases/nixpkgs/channels/$channelName http://releases.nixos.org/nixpkgs/$release" >> $htaccess.tmp # obsolete
+echo "Redirect /channels/$channelName /releases/nixpkgs/$release" > $htaccess.tmp
+echo "Redirect /releases/nixpkgs/channels/$channelName /releases/nixpkgs/$release" >> $htaccess.tmp # obsolete
 mv $htaccess.tmp $htaccess
 ln -sfn $releaseDir $channelsDir/$channelName # dummy symlink
 
