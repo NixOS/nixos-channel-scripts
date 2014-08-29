@@ -52,6 +52,10 @@ else
     $wget --directory=$tmpDir $url/job/nixos.ova.i686-linux/download
     $wget --directory=$tmpDir $url/job/nixos.ova.x86_64-linux/download
 
+    for i in $tmpDir/*.iso $tmpDir/*.ova; do
+        nix-hash --type sha256 --flat $i > $i.sha256
+    done
+
     perl -w ./mirror-channel.pl "$url/channel" "$tmpDir" \
         nix-cache http://cache.nixos.org \
         /data/releases/patches/all-patches "$url/job/nixos.channel/download/1"
