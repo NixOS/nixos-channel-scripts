@@ -11,20 +11,22 @@ release=$(basename $releaseDir)
 # Generate a .htaccess with some symbolic redirects to the latest ISOs.
 htaccess=/data/releases/nixos/.htaccess
 
-baseURL="http://releases.nixos.org/nixos/$version/$release"
-echo "Redirect /nixos/latest $baseURL" > $htaccess.tmp
-fn=$(cd $releaseDir && echo nixos-minimal-*-i686-linux.iso)
-echo "Redirect /nixos/latest-iso-minimal-i686-linux $baseURL/$fn" >> $htaccess.tmp
-fn=$(cd $releaseDir && echo nixos-minimal-*-x86_64-linux.iso)
-echo "Redirect /nixos/latest-iso-minimal-x86_64-linux $baseURL/$fn" >> $htaccess.tmp
-fn=$(cd $releaseDir && echo nixos-graphical-*-i686-linux.iso)
-echo "Redirect /nixos/latest-iso-graphical-i686-linux $baseURL/$fn" >> $htaccess.tmp
-fn=$(cd $releaseDir && echo nixos-graphical-*-x86_64-linux.iso)
-echo "Redirect /nixos/latest-iso-graphical-x86_64-linux $baseURL/$fn" >> $htaccess.tmp
-fn=$(cd $releaseDir && echo nixos-*-i686-linux.ova)
-echo "Redirect /nixos/latest-ova-i686-linux $baseURL/$fn" >> $htaccess.tmp
-fn=$(cd $releaseDir && echo nixos-*-x86_64-linux.ova)
-echo "Redirect /nixos/latest-ova-x86_64-linux $baseURL/$fn" >> $htaccess.tmp
+link() {
+    local name="$1"
+    local wildcard="$2"
+    fn=$(cd $releaseDir && echo $wildcard)
+    echo "Redirect /releases/nixos/$name $baseURL/$fn" >> $htaccess.tmp
+    echo "Redirect /releases/nixos/${name}-sha256 $baseURL/${fn}.sha256" >> $htaccess.tmp
+}
+
+baseURL="/releases/nixos/$version/$release"
+echo "Redirect /releases/nixos/latest $baseURL" > $htaccess.tmp
+link latest-iso-minimal-i686-linux "nixos-minimal-*-i686-linux.iso"
+link latest-iso-minimal-x86_64-linux "nixos-minimal-*-x86_64-linux.iso"
+link latest-iso-graphical-i686-linux "nixos-graphical-*-i686-linux.iso"
+link latest-iso-graphical-x86_64-linux "nixos-graphical-*-x86_64-linux.iso"
+link latest-ova-i686-linux "nixos-*-i686-linux.ova"
+link latest-ova-x86_64-linux "nixos-*-x86_64-linux.ova"
 
 mv $htaccess.tmp $htaccess
 
