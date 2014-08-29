@@ -43,7 +43,9 @@ else
     $curl -L $url/job/nixos.manual.x86_64-linux/output/out | bzip2 -d | nix-store --restore $tmpDir/foo
     mv $tmpDir/foo/share/doc/nixos $tmpDir/manual
     rm -rf $tmpDir/foo
-    ln -s manual.html $tmpDir/manual/index.html
+    if ! [ -e $tmpDir/manual/index.html ]; then
+	ln -s manual.html $tmpDir/manual/index.html
+    fi
 
     $wget --directory=$tmpDir $url/job/nixos.iso_minimal.i686-linux/download
     $wget --directory=$tmpDir $url/job/nixos.iso_minimal.x86_64-linux/download
