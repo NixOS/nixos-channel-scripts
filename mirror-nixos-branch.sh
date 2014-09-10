@@ -60,7 +60,7 @@ else
 
     perl -w ./mirror-channel.pl "$url/channel" "$tmpDir" \
         nix-cache http://cache.nixos.org \
-        /data/releases/patches/all-patches "$url/job/nixos.channel/download/1"
+        "$url/job/nixos.channel/download/1"
 
     # Generate the programs.sqlite database and put it in nixexprs.tar.xz.
     mkdir $tmpDir/unpack

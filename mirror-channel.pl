@@ -4,7 +4,6 @@
 
 use strict;
 use Nix::Manifest;
-use Nix::GeneratePatches;
 use Nix::Utils;
 use Nix::Store;
 use File::Basename;
@@ -15,7 +14,7 @@ use Forks::Super 'bg_eval';
 
 
 if (scalar @ARGV < 4 || scalar @ARGV > 6) {
-    print STDERR "Syntax: perl mirror-channel.pl <src-channel-url> <dst-channel-dir> <bucket-name> <nar-url> [<all-patches-manifest [<nix-exprs-url>]]\n";
+    print STDERR "Syntax: perl mirror-channel.pl <src-channel-url> <dst-channel-dir> <bucket-name> <nar-url> [<nix-exprs-url>]\n";
     exit 1;
 }
 
@@ -27,8 +26,7 @@ my $srcChannelURL = $ARGV[0];
 my $dstChannelPath = $ARGV[1];
 my $bucketName = $ARGV[2];
 my $cacheURL = $ARGV[3]; die if $cacheURL =~ /\/$/;
-my $allPatchesManifest = $ARGV[4] || "";
-my $nixexprsURL = $ARGV[5];
+my $nixexprsURL = $ARGV[4];
 
 die "$dstChannelPath doesn't exist\n" unless -d $dstChannelPath;
 
@@ -204,17 +202,6 @@ foreach my $r (@results) {
         $narFiles{$storePath} = [$nar];
     }
 }
-
-
-# Read all the old patches and propagate the useful ones.  We use the
-# file "all-patches" to keep track of all patches that have been
-# generated in the past, so that patches are not lost if (for
-# instance) a package temporarily disappears from the source channel,
-# or if multiple instances of this script are running concurrently.
-my (%dummy, %allPatches);
-readManifest($allPatchesManifest, \%dummy, \%allPatches)
-    if $allPatchesManifest ne "" && -f $allPatchesManifest;
-propagatePatches \%allPatches, \%narFiles, \%patches;
 
 
 # Make the temporary manifest available.

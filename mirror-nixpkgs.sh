@@ -31,7 +31,7 @@ else
 
     perl -w ./mirror-channel.pl "$url/channel" "$tmpDir" \
         nix-cache http://cache.nixos.org \
-        /data/releases/patches/all-patches "$url/job/tarball/download/1"
+        "$url/job/tarball/download/1"
 
     # Extract the manual.
     $curl -L $url/job/manual/output/out | bzip2 -d | nix-store --restore $tmpDir/foo
