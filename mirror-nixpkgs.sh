@@ -34,9 +34,9 @@ else
         /data/releases/patches/all-patches "$url/job/tarball/download/1"
 
     # Extract the manual.
-    mkdir $tmpDir/manual
-    tar xf $tmpDir/nixexprs.tar.xz --strip-components=2 -C $tmpDir/manual \
-	--wildcards '*/doc' --exclude '*.xml' --exclude '*.xsl' --exclude '*.txt' --exclude 'Makefile'
+    $curl -L $url/job/manual/output/out | bzip2 -d | nix-store --restore $tmpDir/foo
+    mv $tmpDir/foo/share/doc/nixpkgs $tmpDir/manual
+    rm -rf $tmpDir/foo
     ln -s manual.html $tmpDir/manual/index.html
 
     mv $tmpDir $releaseDir
