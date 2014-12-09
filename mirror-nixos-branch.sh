@@ -37,6 +37,8 @@ else
     tmpDir="$(dirname $releaseDir)/.tmp-$release-$$"
     mkdir -p $tmpDir
 
+    trap 'rm -rf -- "$tmpDir"' EXIT
+
     echo $url > $tmpDir/src-url
 
     # Copy the manual.
@@ -47,30 +49,35 @@ else
 	ln -s manual.html $tmpDir/manual/index.html
     fi
 
-    $wget --directory=$tmpDir $url/job/nixos.iso_minimal.i686-linux/download
     $wget --directory=$tmpDir $url/job/nixos.iso_minimal.x86_64-linux/download
-    $wget --directory=$tmpDir $url/job/nixos.iso_graphical.i686-linux/download
-    $wget --directory=$tmpDir $url/job/nixos.iso_graphical.x86_64-linux/download
-    $wget --directory=$tmpDir $url/job/nixos.ova.i686-linux/download
-    $wget --directory=$tmpDir $url/job/nixos.ova.x86_64-linux/download
+    if ! [[ $branch =~ small ]]; then
+	$wget --directory=$tmpDir $url/job/nixos.iso_minimal.i686-linux/download
+	$wget --directory=$tmpDir $url/job/nixos.iso_graphical.x86_64-linux/download
+	$wget --directory=$tmpDir $url/job/nixos.iso_graphical.i686-linux/download
+	$wget --directory=$tmpDir $url/job/nixos.ova.x86_64-linux/download
+	$wget --directory=$tmpDir $url/job/nixos.ova.i686-linux/download
+    fi
 
+    shopt -s nullglob
     for i in $tmpDir/*.iso $tmpDir/*.ova; do
         nix-hash --type sha256 --flat $i > $i.sha256
     done
+    shopt -u nullglob
 
     perl -w ./mirror-channel.pl "$url/channel" "$tmpDir" \
-        nix-cache http://cache.nixos.org \
+        nix-cache https://cache.nixos.org \
         "$url/job/nixos.channel/download/1"
 
     # Generate the programs.sqlite database and put it in nixexprs.tar.xz.
     mkdir $tmpDir/unpack
     tar xfJ $tmpDir/nixexprs.tar.xz -C $tmpDir/unpack
     exprDir=$(echo $tmpDir/unpack/*)
-    ./generate-programs-index.pl "$exprDir" "$exprDir/programs.sqlite"
+    ./generate-programs-index.pl "$exprDir" "$exprDir/programs.sqlite" "$tmpDir/MANIFEST"
     tar cfJ $tmpDir/nixexprs.tar.xz -C $tmpDir/unpack "$(basename "$exprDir")"
     rm -rf $tmpDir/unpack
 
     mv $tmpDir $releaseDir
+    trap '' EXIT
 fi
 
 # Copy over to nixos.org.

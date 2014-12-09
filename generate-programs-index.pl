@@ -3,9 +3,14 @@
 use strict;
 use DBI;
 use DBD::SQLite;
+use Nix::Manifest;
 
 my $nixExprs = $ARGV[0] or die;
 my $dbPath = $ARGV[1] or die;
+my $manifestPath = $ARGV[2] or die;
+
+my (%narFiles, %patches);
+readManifest("$manifestPath", \%narFiles, \%patches);
 
 my $dbh = DBI->connect("dbi:SQLite:dbname=$dbPath", "", "")
     or die "cannot open database `$dbPath'";
@@ -46,6 +51,7 @@ for my $system ("x86_64-linux", "i686-linux") {
     foreach my $line (split "\n", $out) {
 	my ($name, $outPath) = split ' ', $line;
 	die unless $name && $outPath;
+	next unless defined $narFiles{$outPath};
 	next unless -d $outPath;
 	my $pkgname = $name;
 	$pkgname =~ s/-\d.*//;

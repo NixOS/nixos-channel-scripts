@@ -12,13 +12,15 @@ find /data/releases/nixos/ /data/releases/nixpkgs/ -maxdepth 1 -name ".tmp*" -mt
 done
 
 # Remove old NixOS releases. 
-find /data/releases/nixos/unstable/ /data/releases/nixos/??.??/ -maxdepth 1 -name "nixos-*pre*" -mtime +7 | sort | while read rel; do 
+find /data/releases/nixos/unstable/ /data/releases/nixos/unstable-small/ /data/releases/nixos/??.??/ /data/releases/nixos/??.??-small/ -maxdepth 1 -name "nixos-*pre*" -mtime +7 | sort | while read rel; do 
     if [ -e $rel/keep ]; then 
 	echo "keeping NixOS release $rel" >&2
 	continue
     fi
     echo "removing old NixOS release $rel" >&2
-    mv $rel $trash/
+    dst=$trash/$(basename $(dirname $rel))
+    mkdir -p $dst
+    mv $rel $dst/
 done
 
 # Remove old Nixpkgs releases. 
