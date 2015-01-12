@@ -30,7 +30,7 @@ else
     echo $url > $tmpDir/src-url
 
     perl -w ./mirror-channel.pl "$url/channel" "$tmpDir" \
-        nix-cache http://cache.nixos.org \
+        nix-cache https://cache.nixos.org \
         "$url/job/tarball/download/1"
 
     # Extract the manual.
