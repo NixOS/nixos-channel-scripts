@@ -46,16 +46,16 @@ else
     mv $tmpDir/foo/share/doc/nixos $tmpDir/manual
     rm -rf $tmpDir/foo
     if ! [ -e $tmpDir/manual/index.html ]; then
-	ln -s manual.html $tmpDir/manual/index.html
+        ln -s manual.html $tmpDir/manual/index.html
     fi
 
     $wget --directory=$tmpDir $url/job/nixos.iso_minimal.x86_64-linux/download
     if ! [[ $branch =~ small ]]; then
-	$wget --directory=$tmpDir $url/job/nixos.iso_minimal.i686-linux/download
-	$wget --directory=$tmpDir $url/job/nixos.iso_graphical.x86_64-linux/download
-	$wget --directory=$tmpDir $url/job/nixos.iso_graphical.i686-linux/download
-	$wget --directory=$tmpDir $url/job/nixos.ova.x86_64-linux/download
-	$wget --directory=$tmpDir $url/job/nixos.ova.i686-linux/download
+        $wget --directory=$tmpDir $url/job/nixos.iso_minimal.i686-linux/download
+        $wget --directory=$tmpDir $url/job/nixos.iso_graphical.x86_64-linux/download
+        $wget --directory=$tmpDir $url/job/nixos.iso_graphical.i686-linux/download
+        $wget --directory=$tmpDir $url/job/nixos.ova.x86_64-linux/download
+        $wget --directory=$tmpDir $url/job/nixos.ova.i686-linux/download
     fi
 
     shopt -s nullglob
