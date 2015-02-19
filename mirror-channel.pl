@@ -3,14 +3,15 @@
 # already available in the target directory.
 
 use strict;
-use Nix::Manifest;
-use Nix::Utils;
-use Nix::Store;
 use File::Basename;
 use File::stat;
-use Net::Amazon::S3;
-use List::MoreUtils qw(part);
 use Forks::Super 'bg_eval';
+use List::MoreUtils qw(part);
+use MIME::Base64;
+use Net::Amazon::S3;
+use Nix::Manifest;
+use Nix::Store;
+use Nix::Utils;
 
 
 if (scalar @ARGV < 4 || scalar @ARGV > 6) {
@@ -31,6 +32,17 @@ my $nixexprsURL = $ARGV[4];
 die "$dstChannelPath doesn't exist\n" unless -d $dstChannelPath;
 
 my $manifestPath = "$dstChannelPath/MANIFEST";
+
+
+# Read the secret key for signing .narinfo files.
+my $secretKeyFile = "/home/hydra-mirror/.keys/cache.nixos.org-1/secret"; # FIXME: make configurable
+my ($keyName, $secretKey);
+if (defined $secretKeyFile) {
+    my $s = readFile $secretKeyFile;
+    chomp $s;
+    ($keyName, $secretKey) = split ":", $s;
+    die "invalid secret key file ‘$secretKeyFile’\n" unless defined $keyName && defined $secretKey;
+}
 
 
 # S3 setup.
@@ -89,13 +101,6 @@ sub permute {
 }
 
 
-sub queryPathHash16 {
-    my ($storePath) = @_;
-    my ($deriver, $narHash, $time, $narSize, $refs) = queryPathInfo($storePath, 0);
-    return $narHash;
-}
-
-
 # Download every file that we don't already have, and update every URL
 # to point to the mirror.  Also fill in the size and hash fields in
 # the manifest in order to be compatible with Nix < 0.13.
@@ -133,12 +138,12 @@ sub mirrorStorePath {
         my $dstFileTmp = "/tmp/nar.$$";
         my $ext;
 
-        if (isValidPath($storePath) && queryPathHash16($storePath) eq $nar->{narHash}) {
+        if (isValidPath($storePath) && queryPathHash($storePath) eq $nar->{narHash}) {
             print STDERR "copying $storePath\n";
 
             # Verify that $storePath hasn't been corrupted and compress it at the same time.
             $ext = "xz";
-            my $narHash = `bash -c 'exec 4>&1; nix-store --dump $storePath | tee >(nix-hash --type sha256 --flat /dev/stdin >&4) | xz -7 > $dstFileTmp'`;
+            my $narHash = `bash -c 'exec 4>&1; nix-store --dump $storePath | tee >(nix-hash --type sha256 --base32 --flat /dev/stdin >&4) | xz -7 > $dstFileTmp'`;
             chomp $narHash;
             die "hash mismatch in `$storePath'" if "sha256:$narHash" ne $nar->{narHash};
         } else {
@@ -148,7 +153,7 @@ sub mirrorStorePath {
             # Verify whether the downloaded file is a bzipped NAR file
             # that matches the NAR hash given in the manifest.
             $ext = "bz2";
-            my $narHash = `bunzip2 < $dstFileTmp | nix-hash --type sha256 --flat /dev/stdin` or die;
+            my $narHash = `bunzip2 < $dstFileTmp | nix-hash --type sha256 --base32 --flat /dev/stdin` or die;
             chomp $narHash;
             die "hash mismatch in downloaded file `$nar->{url}'" if "sha256:$narHash" ne $nar->{narHash};
         }
@@ -169,6 +174,7 @@ sub mirrorStorePath {
 
         # Write the .narinfo.
         my $info;
+        my @refs = split " ", $nar->{references};
         $info .= "StorePath: $storePath\n";
         $info .= "URL: nar/$fileHash.nar.$ext\n";
         $info .= "Compression: " . ($ext eq "xz" ? "xz" : "bzip2") . "\n";
@@ -176,9 +182,15 @@ sub mirrorStorePath {
         $info .= "FileSize: $nar->{size}\n";
         $info .= "NarHash: $nar->{narHash}\n";
         $info .= "NarSize: $nar->{narSize}\n";
-        $info .= "References: " . join(" ", map { basename $_ } (split " ", $nar->{references})) . "\n";
+        $info .= "References: " . join(" ", map { basename $_ } @refs) . "\n";
         $info .= "Deriver: " . basename $nar->{deriver} . "\n" if $nar->{deriver} ne "";
         $info .= "System: $nar->{system}\n" if defined $nar->{system};
+
+        if (defined $keyName) {
+            my $fingerprint = fingerprintPath($storePath, $nar->{narHash}, $nar->{narSize}, \@refs);
+            my $sig = encode_base64(signString(decode_base64($secretKey), $fingerprint), "");
+            $info .= "Sig: $keyName:$sig\n";
+        }
 
         $bucket->add_key($narInfoFile, $info) or die "failed to upload $narInfoFile to S3\n";
     }
