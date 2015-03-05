@@ -12,6 +12,7 @@ releaseUrl="http://hydra.nixos.org/job/nixos/$jobset/tested/latest-finished"
 releasesDir="/data/releases/nixos/$branch"
 channelsDir=/data/releases/channels
 channelName=nixos-"$branch"
+export GIT_DIR=/home/hydra-mirror/nixpkgs-channels
 
 curl="curl --silent --show-error --fail"
 wget="wget --no-verbose --content-disposition"
@@ -31,6 +32,12 @@ releaseDir=$releasesDir/$release
 
 echo "release is ‘$release’ (build $releaseId), eval is ‘$url’, dir is ‘$releaseDir’" >&2
 
+# Figure out the Git revision from which this release was
+# built. FIXME: get this from Hydra directly.
+shortRev=$(echo "$release" | sed 's/.*\.//')
+rev=$(git rev-parse "$shortRev")
+echo "revision is $rev"
+
 if [ -d $releaseDir ]; then
     echo "release already exists" >&2
 else
@@ -39,7 +46,8 @@ else
 
     trap 'rm -rf -- "$tmpDir"' EXIT
 
-    echo $url > $tmpDir/src-url
+    echo -n "$url" > $tmpDir/src-url
+    echo -n "$rev" > $tmpDir/git-revision
 
     # Copy the manual.
     $curl -L $url/job/nixos.manual.x86_64-linux/output/out | bzip2 -d | nix-store --restore $tmpDir/foo
@@ -95,5 +103,9 @@ flock -x $channelsDir/.htaccess.lock -c "cat $channelsDir/.htaccess-nix* > $chan
 
 cd "$channelsDir"
 rsync -avR . hydra-mirror@nixos.org:"$channelsDir" --delete >&2
+
+# Update the nixpkgs-channels repo.
+git remote update nixpkgs
+git push nixpkgs-channels "$rev:refs/heads/$channelName"
 
 echo "$releaseDir"
