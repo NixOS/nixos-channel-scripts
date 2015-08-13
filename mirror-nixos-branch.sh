@@ -36,7 +36,7 @@ echo "release is ‘$release’ (build $releaseId), eval is ‘$url’, dir is �
 # built. FIXME: get this from Hydra directly.
 shortRev=$(echo "$release" | sed 's/.*\.//')
 rev=$(git rev-parse "$shortRev")
-echo "revision is $rev"
+echo "revision is $rev" >&2
 
 if [ -d $releaseDir ]; then
     echo "release already exists" >&2
@@ -104,8 +104,8 @@ flock -x $channelsDir/.htaccess.lock -c "cat $channelsDir/.htaccess-nix* > $chan
 cd "$channelsDir"
 rsync -avR . hydra-mirror@nixos.org:"$channelsDir" --delete >&2
 
-# Update the nixpkgs-channels repo.
-git remote update nixpkgs
-git push nixpkgs-channels "$rev:refs/heads/$channelName"
+# Update the nixpkgs-channels repo. FIXME: protect against concurrent access
+git remote update nixpkgs >&2
+git push nixpkgs-channels "$rev:refs/heads/$channelName" >&2
 
 echo "$releaseDir"
