@@ -45,18 +45,16 @@ sub process_dir {
 for my $system ("x86_64-linux", "i686-linux") {
     print STDERR "indexing programs for $system...\n";
 
-    my $out = `nix-env -f $nixExprs -qa \\* --out-path --argstr system $system`;
+    my $out = `nix-env -f $nixExprs -qaP \\* --out-path --argstr system $system`;
     die "cannot evaluate Nix expressions for $system" if $? != 0;
 
     foreach my $line (split "\n", $out) {
-	my ($name, $outPath) = split ' ', $line;
-	die unless $name && $outPath;
+	my ($attrName, $name, $outPath) = split ' ', $line;
+	die unless $attrName && $name && $outPath;
 	next unless defined $narFiles{$outPath};
 	next unless -d $outPath;
-	my $pkgname = $name;
-	$pkgname =~ s/-\d.*//;
-	process_dir($system, $pkgname, "$outPath/bin");
-	process_dir($system, $pkgname, "$outPath/sbin");
+	process_dir($system, $attrName, "$outPath/bin");
+	process_dir($system, $attrName, "$outPath/sbin");
     }
 }
 
