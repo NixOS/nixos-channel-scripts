@@ -32,6 +32,16 @@ releaseDir=$releasesDir/$release
 
 echo "release is ‘$release’ (build $releaseId), eval is ‘$url’, dir is ‘$releaseDir’" >&2
 
+curRelease=$(basename $(readlink $channelsDir/$channelName 2> /dev/null) 2> /dev/null || true)
+
+if [ -n "$curRelease" ]; then
+    d="$(nix-instantiate --eval -E "builtins.compareVersions (builtins.parseDrvName \"$curRelease\").version (builtins.parseDrvName \"$release\").version")"
+    if [ "$d" = 1 ]; then
+	echo "channel would go back in time from $curRelease to $release, bailing out" >&2
+	exit 1
+    fi
+fi
+
 # Figure out the Git revision from which this release was
 # built. FIXME: get this from Hydra directly.
 shortRev=$(echo "$release" | sed 's/.*\.//')
