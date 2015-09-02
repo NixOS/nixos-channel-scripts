@@ -98,6 +98,10 @@ else
     trap '' EXIT
 fi
 
+# Prevent concurrent writes to the channels and the Git clone.
+exec 10>$channelsDir/.htaccess.lock
+flock 10
+
 # Copy over to nixos.org.
 cd "$releasesDir"
 rsync -avR . hydra-mirror@nixos.org:"$releasesDir" --exclude .htaccess --exclude ".tmp.*" --delete >&2
@@ -109,12 +113,12 @@ echo "Redirect /releases/nixos/channels/$channelName /releases/nixos/$branch/$re
 mv $htaccess.tmp $htaccess
 ln -sfn $releaseDir $channelsDir/$channelName # dummy symlink
 
-flock -x $channelsDir/.htaccess.lock -c "cat $channelsDir/.htaccess-nix* > $channelsDir/.htaccess"
+cat $channelsDir/.htaccess-nix* > $channelsDir/.htaccess
 
 cd "$channelsDir"
 rsync -avR . hydra-mirror@nixos.org:"$channelsDir" --delete >&2
 
-# Update the nixpkgs-channels repo. FIXME: protect against concurrent access
+# Update the nixpkgs-channels repo.
 git remote update nixpkgs >&2
 git push nixpkgs-channels "$rev:refs/heads/$channelName" >&2
 

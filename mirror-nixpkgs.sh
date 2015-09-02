@@ -42,6 +42,10 @@ else
     mv $tmpDir $releaseDir
 fi
 
+# Prevent concurrent writes to the channels and the Git clone.
+exec 10>$channelsDir/.htaccess.lock
+flock 10
+
 # Copy over to nixos.org.
 cd "$releasesDir"
 rsync -avR . hydra-mirror@nixos.org:"$releasesDir" --delete >&2
@@ -53,7 +57,7 @@ echo "Redirect /releases/nixpkgs/channels/$channelName /releases/nixpkgs/$releas
 mv $htaccess.tmp $htaccess
 ln -sfn $releaseDir $channelsDir/$channelName # dummy symlink
 
-flock -x $channelsDir/.htaccess.lock -c "cat $channelsDir/.htaccess-nix* > $channelsDir/.htaccess"
+cat $channelsDir/.htaccess-nix* > $channelsDir/.htaccess
 
 cd "$channelsDir"
 rsync -avR . hydra-mirror@nixos.org:"$channelsDir" --delete >&2
