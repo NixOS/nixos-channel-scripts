@@ -22,22 +22,23 @@ $dbh->do(<<EOF);
     name        text not null,
     system      text not null,
     package     text not null,
-    primary key (name, system, package)
+    attrPath    text not null,
+    primary key (name, system, package, attrPath)
   );
 EOF
 
-my $insertProgram = $dbh->prepare("insert or replace into Programs(name, system, package) values (?, ?, ?)");
+my $insertProgram = $dbh->prepare("insert or replace into Programs(name, system, package, attrPath) values (?, ?, ?, ?)");
 
 $dbh->begin_work;
 
 sub process_dir {
-    my ($system, $pkgname, $dir) = @_;
+    my ($system, $pkgname, $attrPath, $dir) = @_;
     return unless -d $dir;
     print STDERR "indexing $dir\n";
     opendir DH, "$dir" or die "opening $dir";
     for my $program (readdir DH) {
         next if substr($program, 0, 1) eq ".";
-        $insertProgram->execute($program, $system, $pkgname);
+        $insertProgram->execute($program, $system, $pkgname, $attrPath);
     }
     closedir DH;
 }
@@ -45,18 +46,18 @@ sub process_dir {
 for my $system ("x86_64-linux", "i686-linux") {
     print STDERR "indexing programs for $system...\n";
 
-    my $out = `nix-env -f $nixExprs -qa \\* --out-path --argstr system $system`;
+    my $out = `nix-env -f $nixExprs -qaP \\* --out-path --argstr system $system`;
     die "cannot evaluate Nix expressions for $system" if $? != 0;
 
     foreach my $line (split "\n", $out) {
-	my ($name, $outPath) = split ' ', $line;
-	die unless $name && $outPath;
+	my ($attrPath, $name, $outPath) = split ' ', $line;
+	die unless $attrPath && $name && $outPath;
 	next unless defined $narFiles{$outPath};
 	next unless -d $outPath;
 	my $pkgname = $name;
 	$pkgname =~ s/-\d.*//;
-	process_dir($system, $pkgname, "$outPath/bin");
-	process_dir($system, $pkgname, "$outPath/sbin");
+	process_dir($system, $pkgname, $attrPath, "$outPath/bin");
+	process_dir($system, $pkgname, $attrPath, "$outPath/sbin");
     }
 }
 
