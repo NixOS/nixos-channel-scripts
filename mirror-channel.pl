@@ -59,7 +59,9 @@ my $bucket = $s3->bucket($bucketName) or die;
 
 
 # Fetch the manifest.
-system("$curl '$srcChannelURL/MANIFEST' > $dstChannelPath/MANIFEST") == 0 or die;
+unless (-e "$dstChannelPath/MANIFEST") {
+    system("$curl '$srcChannelURL/MANIFEST' > $dstChannelPath/MANIFEST") == 0 or die;
+}
 
 
 if (defined $nixexprsURL) {
@@ -144,6 +146,7 @@ sub mirrorStorePath {
             # Verify that $storePath hasn't been corrupted and compress it at the same time.
             $ext = "xz";
             my $narHash = `bash -c 'exec 4>&1; nix-store --dump $storePath | tee >(nix-hash --type sha256 --base32 --flat /dev/stdin >&4) | xz -7 > $dstFileTmp'`;
+            die "unable to compress $storePath to $dstFileTmp\n" if $? != 0;
             chomp $narHash;
             die "hash mismatch in `$storePath'" if "sha256:$narHash" ne $nar->{narHash};
         } else {
