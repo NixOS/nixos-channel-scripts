@@ -44,6 +44,7 @@ fi
 
 # Figure out the Git revision from which this release was
 # built. FIXME: get this from Hydra directly.
+git remote update nixpkgs >&2
 shortRev=$(echo "$release" | sed 's/.*\.//')
 rev=$(git rev-parse "$shortRev")
 echo "revision is $rev" >&2
@@ -119,7 +120,6 @@ cd "$channelsDir"
 rsync -avR . hydra-mirror@nixos.org:"$channelsDir" --delete >&2
 
 # Update the nixpkgs-channels repo.
-git remote update nixpkgs >&2
 git push nixpkgs-channels "$rev:refs/heads/$channelName" >&2
 
 echo "$releaseDir"
