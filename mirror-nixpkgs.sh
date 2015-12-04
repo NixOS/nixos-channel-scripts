@@ -4,6 +4,7 @@ releaseUrl=http://hydra.nixos.org/job/nixpkgs/trunk/unstable/latest-finished
 releasesDir=/data/releases/nixpkgs
 channelsDir=/data/releases/channels
 channelName=nixpkgs-unstable
+export GIT_DIR=/home/hydra-mirror/nixpkgs-channels
 curl="curl --silent --show-error --fail"
 
 json=$($curl -L -H 'Accept: application/json' $releaseUrl)
@@ -20,6 +21,13 @@ if [ -z "$url" ]; then exit 1; fi
 releaseDir=$releasesDir/$release
 
 echo "release is ‘$release’ (build $releaseId), eval is ‘$url’, dir is ‘$releaseDir’" >&2
+
+# Figure out the Git revision from which this release was
+# built. FIXME: get this from Hydra directly.
+git remote update nixpkgs >&2
+shortRev=$(echo "$release" | sed 's/.*\.//')
+rev=$(git rev-parse "$shortRev")
+echo "revision is $rev" >&2
 
 if [ -d $releaseDir ]; then
     echo "release already exists" >&2
@@ -61,3 +69,6 @@ cat $channelsDir/.htaccess-nix* > $channelsDir/.htaccess
 
 cd "$channelsDir"
 rsync -avR . hydra-mirror@nixos.org:"$channelsDir" --delete >&2
+
+# Update the nixpkgs-channels repo.
+git push nixpkgs-channels "$rev:refs/heads/nixpkgs-unstable" >&2
