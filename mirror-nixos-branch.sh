@@ -87,11 +87,11 @@ else
         nix-cache https://cache.nixos.org \
         "$url/job/nixos.channel/download/1"
 
-    # Generate the programs.sqlite database and put it in nixexprs.tar.xz.
+    # Generate the index.sqlite database and put it in nixexprs.tar.xz.
     mkdir $tmpDir/unpack
     tar xfJ $tmpDir/nixexprs.tar.xz -C $tmpDir/unpack
     exprDir=$(echo $tmpDir/unpack/*)
-    ./generate-programs-index.pl "$exprDir" "$exprDir/programs.sqlite" "$tmpDir/MANIFEST"
+    ./generate-index.pl "$exprDir" "$exprDir/index.sqlite" "$tmpDir/MANIFEST"
     tar cfJ $tmpDir/nixexprs.tar.xz -C $tmpDir/unpack "$(basename "$exprDir")"
     rm -rf $tmpDir/unpack
 
