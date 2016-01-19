@@ -3,8 +3,9 @@
 use strict;
 use DBI;
 use DBD::SQLite;
-use Nix::Manifest;
+use File::Find;
 use List::Util qw(all);
+use Nix::Manifest;
 
 my $nixExprs = $ARGV[0] or die;
 my $dbPath = $ARGV[1] or die;
@@ -26,25 +27,45 @@ $dbh->do(<<EOF);
     primary key (name, system, package)
   );
 EOF
+$dbh->do(<<EOF);
+  create table if not exists Libraries (
+    name        text not null,
+    system      text not null,
+    package     text not null,
+    primary key (name, system, package)
+  );
+EOF
 
 my $insertProgram = $dbh->prepare("insert or replace into Programs(name, system, package) values (?, ?, ?)");
+my $insertLibrary = $dbh->prepare("insert or replace into Libraries(name, system, package) values (?, ?, ?)");
 
 $dbh->begin_work;
 
+sub wanted_bin {
+    my ($system, $pkgname) = @_;
+    return sub {
+        ! /^\..*\z/s
+        && $insertProgram->execute($_, $system, $pkgname);
+    }
+}
+
+sub wanted_lib {
+    my ($system, $pkgname) = @_;
+    return sub {
+        /^.*\.so\z/si
+        && $insertLibrary->execute($_, $system, $pkgname);
+    }
+}
+
 sub process_dir {
     my ($system, $pkgname, $dir) = @_;
-    return unless -d $dir;
-    #print STDERR "indexing $dir\n";
-    opendir DH, "$dir" or die "opening $dir";
-    for my $program (readdir DH) {
-        next if substr($program, 0, 1) eq ".";
-        $insertProgram->execute($program, $system, $pkgname);
-    }
-    closedir DH;
+    File::Find::find({wanted => wanted_bin($system, $pkgname)}, "$dir/bin") if -d "$dir/bin";
+    File::Find::find({wanted => wanted_lib($system, $pkgname)}, "$dir/lib") if -d "$dir/lib";
+    File::Find::find({wanted => wanted_lib($system, $pkgname)}, "$dir/lib64") if -d "$dir/lib64";
 }
 
 for my $system ("x86_64-linux", "i686-linux") {
-    print STDERR "indexing programs for $system...\n";
+    print STDERR "indexing programs and libraries for $system...\n";
 
     my $out = `nix-env -f $nixExprs -qaP \\* --drv-path --out-path --argstr system $system`;
     die "cannot evaluate Nix expressions for $system" if $? != 0;
@@ -71,7 +92,7 @@ for my $system ("x86_64-linux", "i686-linux") {
 
     foreach my $drvPath (keys %packages) {
 	my $pkg = $packages{$drvPath};
-	process_dir($system, $pkg->{attrName}, "$_/bin")
+	process_dir($system, $pkg->{attrName}, "$_")
 	    foreach @{$pkg->{outPaths}};
     }
 }
