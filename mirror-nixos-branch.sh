@@ -37,8 +37,8 @@ curRelease=$(basename $(readlink $channelsDir/$channelName 2> /dev/null) 2> /dev
 if [ -n "$curRelease" ]; then
     d="$(nix-instantiate --eval -E "builtins.compareVersions (builtins.parseDrvName \"$curRelease\").version (builtins.parseDrvName \"$release\").version")"
     if [ "$d" = 1 ]; then
-	echo "channel would go back in time from $curRelease to $release, bailing out" >&2
-	exit 1
+        echo "channel would go back in time from $curRelease to $release, bailing out" >&2
+        exit 1
     fi
 fi
 
