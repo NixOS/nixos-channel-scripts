@@ -8,6 +8,7 @@ use File::Path;
 use File::Slurp;
 use JSON::PP;
 use LWP::UserAgent;
+use List::MoreUtils qw(uniq);
 
 my $branch = $ARGV[0];
 my $jobset = $ARGV[1];
@@ -60,12 +61,17 @@ if (-d $releaseDir) {
     print STDERR "release already exists\n";
 } else {
     my $tmpDir = dirname($releaseDir) . "/$releaseName-tmp";
-    print STDERR "$tmpDir\n";
     File::Path::make_path($tmpDir);
 
     write_file("$tmpDir/src-url", $evalUrl);
     write_file("$tmpDir/git-revision", $rev);
     write_file("$tmpDir/binary-cache-url", "https://cache.nixos.org");
+
+    if (! -e "$tmpDir/store-paths.xz") {
+        my $storePaths = decode_json(fetch("$evalUrl/store-paths", 'application/json'));
+        write_file("$tmpDir/store-paths", join("\n", uniq(@{$storePaths})) . "\n");
+        system("xz", "$tmpDir/store-paths") == 0 or die;
+    }
 
     # Copy the manual.
     if (! -e "$tmpDir/manual") {
