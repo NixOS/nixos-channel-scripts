@@ -20,8 +20,7 @@ my $releasesDir = "/data/releases/nixos/$branch";
 my $channelsDir = "/data/releases/channels";
 my $channelName = "nixos-$branch";
 
-#export GIT_DIR=/home/hydra-mirror/nixpkgs-channels
-$ENV{'GIT_DIR'} = "/tmp/nixpkgs-channels/.git"; # FIXME
+$ENV{'GIT_DIR'} = "/home/hydra-mirror/nixpkgs-channels";
 
 sub fetch {
     my ($url, $type) = @_;
