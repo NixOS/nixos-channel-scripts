@@ -12,8 +12,9 @@ use List::MoreUtils qw(uniq);
 
 my $branch = $ARGV[0];
 my $jobset = $ARGV[1];
+my $isMainRelease = ($ARGV[2] // 0) eq 1;
 
-die "Usage: $0 BRANCH-NAME JOBSET_NAME\n" unless defined $branch && defined $jobset;
+die "Usage: $0 BRANCH-NAME JOBSET_NAME [IS-MAIN-RELEASE]\n" unless defined $branch && defined $jobset;
 
 my $releaseUrl = "https://hydra.nixos.org/job/nixos/$jobset/tested/latest-finished";
 my $releasesDir = "/data/releases/nixos/$branch";
@@ -150,4 +151,31 @@ system("cat $channelsDir/.htaccess-nix* > $channelsDir/.htaccess") == 0 or die;
 system("git remote update origin >&2") == 0 or die;
 system("git push channels $rev:refs/heads/$channelName >&2") == 0 or die;
 
-print "$releaseDir\n";
+# If this is the "main" stable release, generate a .htaccess with some
+# symbolic redirects to the latest ISOs.
+
+if ($isMainRelease) {
+
+    my $baseURL = "/releases/nixos/$branch/$releaseName";
+    my $res = "Redirect /releases/nixos/latest $baseURL\n";
+
+    sub add {
+        my ($name, $wildcard) = @_;
+        my @files = glob "$releaseDir/$wildcard";
+        die if scalar @files != 1;
+        my $fn = basename($files[0]);
+        $res .= "Redirect /releases/nixos/$name $baseURL/$fn\n";
+        $res .= "Redirect /releases/nixos/$name-sha256 $baseURL/$fn.sha256\n";
+    }
+
+    add("latest-iso-minimal-i686-linux", "nixos-minimal-*-i686-linux.iso");
+    add("latest-iso-minimal-x86_64-linux", "nixos-minimal-*-x86_64-linux.iso");
+    add("latest-iso-graphical-i686-linux", "nixos-graphical-*-i686-linux.iso");
+    add("latest-iso-graphical-x86_64-linux", "nixos-graphical-*-x86_64-linux.iso");
+    add("latest-ova-i686-linux", "nixos-*-i686-linux.ova");
+    add("latest-ova-x86_64-linux", "nixos-*-x86_64-linux.ova");
+
+    my $htaccess2 = "/data/releases/nixos/.htaccess";
+    write_file("$htaccess2.tmp", $res);
+    rename("$htaccess2.tmp", $htaccess2) or die;
+}
