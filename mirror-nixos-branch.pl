@@ -10,16 +10,16 @@ use JSON::PP;
 use LWP::UserAgent;
 use List::MoreUtils qw(uniq);
 
-my $branch = $ARGV[0];
-my $jobset = $ARGV[1];
+my $channelName = $ARGV[0];
+my $releaseUrl = $ARGV[1];
 my $isMainRelease = ($ARGV[2] // 0) eq 1;
 
-die "Usage: $0 BRANCH-NAME JOBSET_NAME [IS-MAIN-RELEASE]\n" unless defined $branch && defined $jobset;
+die "Usage: $0 CHANNEL-NAME RELEASE-URL [IS-MAIN-RELEASE]\n" unless defined $channelName && defined $releaseUrl;
 
-my $releaseUrl = "https://hydra.nixos.org/job/nixos/$jobset/tested/latest-finished";
-my $releasesDir = "/data/releases/nixos/$branch";
+$channelName =~ /^([a-z]+)-(.*)$/ or die;
+my $channelDirRel = $channelName eq "nixpkgs-unstable" ? "nixpkgs" : "$1/$2";
+my $releasesDir = "/data/releases/$channelDirRel";
 my $channelsDir = "/data/releases/channels";
-my $channelName = "nixos-$branch";
 
 $ENV{'GIT_DIR'} = "/home/hydra-mirror/nixpkgs-channels";
 
@@ -74,11 +74,15 @@ if (-d $releaseDir) {
     }
 
     # Copy the manual.
+    my $manualJob = $channelName =~ /nixos/ ? "nixos.manual.x86_64-linux" : "manual";
+    my $manualDir = $channelName =~ /nixos/ ? "nixos" : "nixpkgs";
     if (! -e "$tmpDir/manual") {
-        my $manualInfo = decode_json(fetch("$evalUrl/job/nixos.manual.x86_64-linux", 'application/json'));
+        my $manualInfo = decode_json(fetch("$evalUrl/job/$manualJob", 'application/json'));
         my $manualPath = $manualInfo->{buildoutputs}->{out}->{path} or die;
         system("nix-store", "-r", $manualPath) == 0 or die "unable to fetch $manualPath\n";
-        system("cp", "-rd", "$manualPath/share/doc/nixos", "$tmpDir/manual") == 0 or die "unable to copy manual from $manualPath";
+        system("cp", "-rd", "$manualPath/share/doc/$manualDir", "$tmpDir/manual") == 0 or die "unable to copy manual from $manualPath";
+        system("chmod", "-R", "u+w", "$tmpDir/manual");
+        symlink("manual.html", "$tmpDir/manual/index.html") unless -e "$tmpDir/manual/index.html";
     }
 
     sub downloadFile {
@@ -108,21 +112,26 @@ if (-d $releaseDir) {
         write_file("$dstFile.sha256", $sha256_expected);
     }
 
-    downloadFile("nixos.channel", "nixexprs.tar.xz");
-    downloadFile("nixos.iso_minimal.x86_64-linux");
+    if ($channelName =~ /nixos/) {
+        downloadFile("nixos.channel", "nixexprs.tar.xz");
+        downloadFile("nixos.iso_minimal.x86_64-linux");
 
-    if ($branch !~ /-small/) {
-        downloadFile("nixos.iso_minimal.i686-linux");
-        downloadFile("nixos.iso_graphical.x86_64-linux");
-        downloadFile("nixos.iso_graphical.i686-linux");
-        downloadFile("nixos.ova.x86_64-linux");
-        downloadFile("nixos.ova.i686-linux");
+        if ($channelName !~ /-small/) {
+            downloadFile("nixos.iso_minimal.i686-linux");
+            downloadFile("nixos.iso_graphical.x86_64-linux");
+            downloadFile("nixos.iso_graphical.i686-linux");
+            downloadFile("nixos.ova.x86_64-linux");
+            downloadFile("nixos.ova.i686-linux");
+        }
+
+    } else {
+        downloadFile("tarball", "nixexprs.tar.xz");
     }
 
     # Make "github-link" a redirect to the GitHub history of this
     # release.
     write_file("$tmpDir/.htaccess",
-               "Redirect /releases/nixos/$branch/$releaseName/github-link https://github.com/NixOS/nixpkgs-channels/commits/$rev\n");
+               "Redirect /releases/$channelDirRel/$releaseName/github-link https://github.com/NixOS/nixpkgs-channels/commits/$rev\n");
     write_file("$tmpDir/github-link", "");
 
     # FIXME: Generate the programs.sqlite database and put it in nixexprs.tar.xz.
@@ -137,8 +146,8 @@ flock($lockfile, LOCK_EX) or die "cannot acquire channels lock\n";
 # Update the channel.
 my $htaccess = "$channelsDir/.htaccess-$channelName";
 write_file($htaccess,
-           "Redirect /channels/$channelName /releases/nixos/$branch/$releaseName\n" .
-           "Redirect /releases/nixos/channels/$channelName /releases/nixos/$branch/$releaseName\n");
+           "Redirect /channels/$channelName /releases/$channelDirRel/$releaseName\n" .
+           "Redirect /releases/nixos/channels/$channelName /releases/$channelDirRel/$releaseName\n");
 
 my $channelLink = "$channelsDir/$channelName";
 unlink("$channelLink.tmp");
@@ -156,7 +165,7 @@ system("git push channels $rev:refs/heads/$channelName >&2") == 0 or die;
 
 if ($isMainRelease) {
 
-    my $baseURL = "/releases/nixos/$branch/$releaseName";
+    my $baseURL = "/releases/$channelDirRel/$releaseName";
     my $res = "Redirect /releases/nixos/latest $baseURL\n";
 
     sub add {
