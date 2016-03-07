@@ -50,8 +50,9 @@ my $rev = $evalInfo->{jobsetevalinputs}->{nixpkgs}->{revision} or die;
 print STDERR "release is ‘$releaseName’ (build $releaseId), eval is $evalId, dir is ‘$releaseDir’, Git commit is $rev\n";
 
 # Guard against the channel going back in time.
-my $curRelease = basename(readlink "$channelsDir/$channelName");
-if (defined $curRelease) {
+my $curReleaseDir = readlink "$channelsDir/$channelName";
+if (defined $curReleaseDir) {
+    my $curRelease = basename($curReleaseDir);
     my $d = `nix-instantiate --eval -E "builtins.compareVersions (builtins.parseDrvName \\"$curRelease\\").version (builtins.parseDrvName \\"$releaseName\\").version"`;
     chomp $d;
     die "channel would go back in time from $curRelease to $releaseName, bailing out\n" if $d == 1;
