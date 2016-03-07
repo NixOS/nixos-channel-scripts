@@ -53,7 +53,7 @@ print STDERR "release is ‘$releaseName’ (build $releaseId), eval is $evalId,
 my $curReleaseDir = readlink "$channelsDir/$channelName";
 if (defined $curReleaseDir) {
     my $curRelease = basename($curReleaseDir);
-    my $d = `nix-instantiate --eval -E "builtins.compareVersions (builtins.parseDrvName \\"$curRelease\\").version (builtins.parseDrvName \\"$releaseName\\").version"`;
+    my $d = `NIX_PATH= nix-instantiate --eval -E "builtins.compareVersions (builtins.parseDrvName \\"$curRelease\\").version (builtins.parseDrvName \\"$releaseName\\").version"`;
     chomp $d;
     die "channel would go back in time from $curRelease to $releaseName, bailing out\n" if $d == 1;
 }
