@@ -36,7 +36,7 @@ $dbh->begin_work;
 sub process_dir {
     my ($system, $pkgname, $dir) = @_;
     return unless -d $dir;
-    #print STDERR "indexing $dir\n";
+    print STDERR "indexing $dir\n";
     opendir DH, "$dir" or die "opening $dir";
     for my $program (readdir DH) {
         next if substr($program, 0, 1) eq ".";
@@ -56,7 +56,7 @@ foreach my $line (split "\n", $out) {
 
 	my @outPaths = map { s/^[a-z]+=//; $_ } (split ";", $outPath);
 
-	next unless all { defined $narFiles{$_} } @outPaths;
+	# next unless all { defined $narFiles{$_} } @outPaths;
 	next unless all { -d $_ } @outPaths;
 
 	# Prefer shorter attribute names.
