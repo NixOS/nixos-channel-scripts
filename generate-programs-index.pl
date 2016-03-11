@@ -1,4 +1,5 @@
-#! /run/current-system/sw/bin/perl -w
+#! /usr/bin/env nix-shell
+#! nix-shell -i perl -p perl perlPackages.DBI perlPackages.DBDSQLite nix
 
 use strict;
 use DBI;
@@ -9,6 +10,7 @@ use List::Util qw(all);
 my $nixExprs = $ARGV[0] or die;
 my $dbPath = $ARGV[1] or die;
 my $manifestPath = $ARGV[2] or die;
+my $system = $ARGV[3] or die;
 
 my (%narFiles, %patches);
 readManifest("$manifestPath", \%narFiles, \%patches);
@@ -43,15 +45,12 @@ sub process_dir {
     closedir DH;
 }
 
-for my $system ("x86_64-linux", "i686-linux") {
-    print STDERR "indexing programs for $system...\n";
+my $out = `nix-env -f $nixExprs -qaP \\* --drv-path --out-path --argstr system $system`;
+die "cannot evaluate Nix expressions for $system" if $? != 0;
 
-    my $out = `nix-env -f $nixExprs -qaP \\* --drv-path --out-path --argstr system $system`;
-    die "cannot evaluate Nix expressions for $system" if $? != 0;
+my %packages;
 
-    my %packages;
-
-    foreach my $line (split "\n", $out) {
+foreach my $line (split "\n", $out) {
 	my ($attrName, $name, $drvPath, $outPath) = split ' ', $line;
 	die unless $attrName && $name && $outPath;
 
@@ -62,18 +61,14 @@ for my $system ("x86_64-linux", "i686-linux") {
 
 	# Prefer shorter attribute names.
 	my $prev = $packages{$drvPath};
-	next if defined $prev &&
-	    (length($prev->{attrName}) < length($attrName) ||
-	     (length($prev->{attrName}) == length($attrName) && $prev->{attrName} le $attrName));
+	next if defined $prev && (length($prev->{attrName}) < length($attrName) || (length($prev->{attrName}) == length($attrName) && $prev->{attrName} le $attrName));
 
 	$packages{$drvPath} = { attrName => $attrName, outPaths => [@outPaths] };
-    }
+}
 
-    foreach my $drvPath (keys %packages) {
-	my $pkg = $packages{$drvPath};
-	process_dir($system, $pkg->{attrName}, "$_/bin")
-	    foreach @{$pkg->{outPaths}};
-    }
+foreach my $drvPath (keys %packages) {
+  my $pkg = $packages{$drvPath};
+  process_dir($system, $pkg->{attrName}, "$_/bin") foreach @{$pkg->{outPaths}};
 }
 
 $dbh->commit;

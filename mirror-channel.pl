@@ -1,3 +1,6 @@
+#! /usr/bin/env nix-shell
+#! nix-shell -i perl -p perl
+
 # This script mirrors a remote Nix channel in the local filesystem.
 # It downloads the remote manifest, then any NAR files that are not
 # already available in the target directory.
@@ -96,7 +99,7 @@ die "cowardly refusing to mirror an empty channel" if $size == 0;
 sub permute {
     my @list = @_;
     for (my $n = scalar @list - 1; $n > 0; $n--) {
-        my $k = int(rand($n + 1)); # 0 <= $k <= $n 
+        my $k = int(rand($n + 1)); # 0 <= $k <= $n
         @list[$n, $k] = @list[$k, $n];
     }
     return @list;
@@ -123,7 +126,7 @@ sub mirrorStorePath {
         $narInfo = parseNARInfo($storePath, $get->{value});
 
         #if (!defined $bucket->head_key("$narInfo->{url}", "GET")) {
-        #    print STDERR "missing NAR $narInfo->{url}!\n"; 
+        #    print STDERR "missing NAR $narInfo->{url}!\n";
         #    $bucket->delete_key("$pathHash.narinfo");
         #    goto recreate;
         #}

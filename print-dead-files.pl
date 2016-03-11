@@ -1,4 +1,5 @@
-#! /var/run/current-system/sw/bin/perl -w -I .
+#! /usr/bin/env nix-shell
+#! nix-shell -i perl -p perl perlPackages.DBI perlPackages.DBDSQLite nix
 
 use strict;
 use Nix::Manifest;
