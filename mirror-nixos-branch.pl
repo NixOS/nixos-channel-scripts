@@ -120,9 +120,9 @@ if (-d $releaseDir) {
         if ($channelName !~ /-small/) {
             downloadFile("nixos.iso_minimal.i686-linux");
             downloadFile("nixos.iso_graphical.x86_64-linux");
-            downloadFile("nixos.iso_graphical.i686-linux");
+            #downloadFile("nixos.iso_graphical.i686-linux");
             downloadFile("nixos.ova.x86_64-linux");
-            downloadFile("nixos.ova.i686-linux");
+            #downloadFile("nixos.ova.i686-linux");
         }
 
     } else {
@@ -180,9 +180,9 @@ if ($isMainRelease) {
 
     add("latest-iso-minimal-i686-linux", "nixos-minimal-*-i686-linux.iso");
     add("latest-iso-minimal-x86_64-linux", "nixos-minimal-*-x86_64-linux.iso");
-    add("latest-iso-graphical-i686-linux", "nixos-graphical-*-i686-linux.iso");
+    #add("latest-iso-graphical-i686-linux", "nixos-graphical-*-i686-linux.iso");
     add("latest-iso-graphical-x86_64-linux", "nixos-graphical-*-x86_64-linux.iso");
-    add("latest-ova-i686-linux", "nixos-*-i686-linux.ova");
+    #add("latest-ova-i686-linux", "nixos-*-i686-linux.ova");
     add("latest-ova-x86_64-linux", "nixos-*-x86_64-linux.ova");
 
     my $htaccess2 = "/data/releases/nixos/.htaccess";
