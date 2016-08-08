@@ -52,27 +52,27 @@ for my $system ("x86_64-linux", "i686-linux") {
     my %packages;
 
     foreach my $line (split "\n", $out) {
-	my ($attrName, $name, $drvPath, $outPath) = split ' ', $line;
-	die unless $attrName && $name && $outPath;
+        my ($attrName, $name, $drvPath, $outPath) = split ' ', $line;
+        die unless $attrName && $name && $outPath;
 
-	my @outPaths = map { s/^[a-z]+=//; $_ } (split ";", $outPath);
+        my @outPaths = map { s/^[a-z]+=//; $_ } (split ";", $outPath);
 
-	next unless all { defined $narFiles{$_} } @outPaths;
-	next unless all { -d $_ } @outPaths;
+        next unless all { defined $narFiles{$_} } @outPaths;
+        next unless all { -d $_ } @outPaths;
 
-	# Prefer shorter attribute names.
-	my $prev = $packages{$drvPath};
-	next if defined $prev &&
-	    (length($prev->{attrName}) < length($attrName) ||
-	     (length($prev->{attrName}) == length($attrName) && $prev->{attrName} le $attrName));
+        # Prefer shorter attribute names.
+        my $prev = $packages{$drvPath};
+        next if defined $prev &&
+            (length($prev->{attrName}) < length($attrName) ||
+             (length($prev->{attrName}) == length($attrName) && $prev->{attrName} le $attrName));
 
-	$packages{$drvPath} = { attrName => $attrName, outPaths => [@outPaths] };
+        $packages{$drvPath} = { attrName => $attrName, outPaths => [@outPaths] };
     }
 
     foreach my $drvPath (keys %packages) {
-	my $pkg = $packages{$drvPath};
-	process_dir($system, $pkg->{attrName}, "$_/bin")
-	    foreach @{$pkg->{outPaths}};
+        my $pkg = $packages{$drvPath};
+        process_dir($system, $pkg->{attrName}, "$_/bin")
+            foreach @{$pkg->{outPaths}};
     }
 }
 
