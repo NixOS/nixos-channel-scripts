@@ -20,6 +20,7 @@ $channelName =~ /^([a-z]+)-(.*)$/ or die;
 my $channelDirRel = $channelName eq "nixpkgs-unstable" ? "nixpkgs" : "$1/$2";
 my $releasesDir = "/data/releases/$channelDirRel";
 my $channelsDir = "/data/releases/channels";
+my $filesCache = "/data/releases/nixos-files.sqlite";
 
 $ENV{'GIT_DIR'} = "/home/hydra-mirror/nixpkgs-channels";
 
@@ -71,7 +72,6 @@ if (-d $releaseDir) {
     if (! -e "$tmpDir/store-paths.xz") {
         my $storePaths = decode_json(fetch("$evalUrl/store-paths", 'application/json'));
         write_file("$tmpDir/store-paths", join("\n", uniq(@{$storePaths})) . "\n");
-        system("xz", "$tmpDir/store-paths") == 0 or die;
     }
 
     # Copy the manual.
@@ -135,7 +135,20 @@ if (-d $releaseDir) {
                "Redirect /releases/$channelDirRel/$releaseName/github-link https://github.com/NixOS/nixpkgs-channels/commits/$rev\n");
     write_file("$tmpDir/github-link", "");
 
-    # FIXME: Generate the programs.sqlite database and put it in nixexprs.tar.xz.
+    # Generate the programs.sqlite database and put it in nixexprs.tar.xz.
+    if ($channelName =~ /nixos/) {
+        File::Path::make_path("$tmpDir/unpack");
+        system("tar", "xfJ", "$tmpDir/nixexprs.tar.xz", "-C", "$tmpDir/unpack") == 0 or die;
+        my $exprDir = glob("$tmpDir/unpack/*");
+        system("generate-programs-index $filesCache $exprDir/programs.sqlite http://nix-cache.s3.amazonaws.com/ $tmpDir/store-paths $exprDir/nixpkgs") == 0 or die;
+        system("rm -f $tmpDir/nixexprs.tar.xz $exprDir/programs.sqlite-journal") == 0 or die;
+        system("tar", "cfJ", "$tmpDir/nixexprs.tar.xz", "-C", "$tmpDir/unpack", basename($exprDir)) == 0 or die;
+        system("rm -rf $tmpDir/unpack") == 0 or die;
+    }
+
+    if (-e "$tmpDir/store-paths") {
+        system("xz", "$tmpDir/store-paths") == 0 or die;
+    }
 
     rename($tmpDir, $releaseDir) or die;
 }
