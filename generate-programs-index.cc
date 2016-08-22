@@ -59,6 +59,7 @@ void mainWrapped(int argc, char * * argv)
     Path nixpkgsPath = argv[5];
 
     settings.readOnlyMode = true;
+    settings.showTrace = true;
 
     auto localStore = openStore();
     auto binaryCache = openStoreAt(argv[3]);
@@ -162,6 +163,9 @@ void mainWrapped(int argc, char * * argv)
                 packagesByPath[output.second] = &package;
             }
         } catch (AssertionError & e) {
+        } catch (Error & e) {
+            e.addPrefix(format("in package ‘%s’: ") % package.attrPath);
+            throw;
         }
 
     /* Return the files in a store path, using a SQLite database to cache the results. */
