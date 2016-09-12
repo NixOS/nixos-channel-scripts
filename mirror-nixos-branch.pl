@@ -168,7 +168,8 @@ unlink("$channelLink.tmp");
 symlink($releaseDir, "$channelLink.tmp") or die;
 rename("$channelLink.tmp", $channelLink) or die;
 
-system("cat $channelsDir/.htaccess-nix* > $channelsDir/.htaccess") == 0 or die;
+system("cat $channelsDir/.htaccess-nix* > $channelsDir/.htaccess.tmp") == 0 or die;
+rename("$channelsDir/.htaccess.tmp", "$channelsDir/.htaccess") or die;
 
 # Update the nixpkgs-channels repo.
 system("git remote update origin >&2") == 0 or die;
