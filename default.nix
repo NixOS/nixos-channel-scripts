@@ -5,9 +5,10 @@ with pkgs;
 let
 
   # FIXME
-  nix = lib.overrideDerivation nixUnstable (orig: {
-    src = /home/eelco/Dev/nix;
-  });
+  nix = builtins.storePath /nix/store/b554awsd9vssb936mb32icgpfbyifsai-nix-1.12pre1234_abcdef;
+  #lib.overrideDerivation nixUnstable (orig: {
+  #  src = /home/eelco/Dev/nix;
+  #});
 
 in
 
@@ -15,7 +16,7 @@ stdenv.mkDerivation {
   name = "nixos-channel-scripts";
 
   buildInputs = with perlPackages;
-    [ nix sqlite makeWrapper perl FileSlurp LWP LWPProtocolHttps ListMoreUtils DBDSQLite ];
+    [ nix sqlite makeWrapper perl FileSlurp LWP LWPProtocolHttps ListMoreUtils DBDSQLite NetAmazonS3 boehmgc ];
 
   buildCommand = ''
     mkdir -p $out/bin
@@ -25,6 +26,8 @@ stdenv.mkDerivation {
 
     cp ${./mirror-nixos-branch.pl} $out/bin/mirror-nixos-branch
     wrapProgram $out/bin/mirror-nixos-branch --set PERL5LIB $PERL5LIB --prefix PATH : ${wget}/bin:${git}/bin:${nix}/bin:${gnutar}/bin:${xz}/bin:$out/bin
+
+    patchShebangs $out/bin
   '';
 
 }

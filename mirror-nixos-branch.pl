@@ -1,6 +1,7 @@
-#! /run/current-system/sw/bin/perl -w
+#! /usr/bin/env perl
 
 use strict;
+use warnings;
 use Data::Dumper;
 use Fcntl qw(:flock);
 use File::Basename;
@@ -9,20 +10,38 @@ use File::Slurp;
 use JSON::PP;
 use LWP::UserAgent;
 use List::MoreUtils qw(uniq);
+use Net::Amazon::S3;
 
 my $channelName = $ARGV[0];
 my $releaseUrl = $ARGV[1];
-my $isMainRelease = ($ARGV[2] // 0) eq 1;
 
-die "Usage: $0 CHANNEL-NAME RELEASE-URL [IS-MAIN-RELEASE]\n" unless defined $channelName && defined $releaseUrl;
+die "Usage: $0 CHANNEL-NAME RELEASE-URL\n" unless defined $channelName && defined $releaseUrl;
 
 $channelName =~ /^([a-z]+)-(.*)$/ or die;
 my $channelDirRel = $channelName eq "nixpkgs-unstable" ? "nixpkgs" : "$1/$2";
-my $releasesDir = "/data/releases/$channelDirRel";
+
+
+# Configuration.
 my $channelsDir = "/data/releases/channels";
 my $filesCache = "/data/releases/nixos-files.sqlite";
+my $bucketName = "nix-releases";
 
 $ENV{'GIT_DIR'} = "/home/hydra-mirror/nixpkgs-channels";
+
+
+# S3 setup.
+my $aws_access_key_id = $ENV{'AWS_ACCESS_KEY_ID'} or die;
+my $aws_secret_access_key = $ENV{'AWS_SECRET_ACCESS_KEY'} or die;
+
+my $s3 = Net::Amazon::S3->new(
+    { aws_access_key_id     => $aws_access_key_id,
+      aws_secret_access_key => $aws_secret_access_key,
+      retry                 => 1,
+      host                  => "s3-eu-west-1.amazonaws.com",
+    });
+
+my $bucket = $s3->bucket($bucketName) or die;
+
 
 sub fetch {
     my ($url, $type) = @_;
@@ -42,13 +61,12 @@ my $releaseId = $releaseInfo->{id} or die;
 my $releaseName = $releaseInfo->{nixname} or die;
 my $evalId = $releaseInfo->{jobsetevals}->[0] or die;
 my $evalUrl = "https://hydra.nixos.org/eval/$evalId";
-my $releaseDir = "$releasesDir/$releaseName";
-
 my $evalInfo = decode_json(fetch($evalUrl, 'application/json'));
+my $releasePrefix = "$channelDirRel/$releaseName";
 
 my $rev = $evalInfo->{jobsetevalinputs}->{nixpkgs}->{revision} or die;
 
-print STDERR "release is ‘$releaseName’ (build $releaseId), eval is $evalId, dir is ‘$releaseDir’, Git commit is $rev\n";
+print STDERR "release is ‘$releaseName’ (build $releaseId), eval is $evalId, prefix is $releasePrefix, Git commit is $rev\n";
 
 # Guard against the channel going back in time.
 my $curReleaseDir = readlink "$channelsDir/$channelName";
@@ -59,10 +77,10 @@ if (defined $curReleaseDir) {
     die "channel would go back in time from $curRelease to $releaseName, bailing out\n" if $d == 1;
 }
 
-if (-d $releaseDir) {
+if ($bucket->head_key("$releasePrefix/github-link")) {
     print STDERR "release already exists\n";
 } else {
-    my $tmpDir = dirname($releaseDir) . "/$releaseName-tmp";
+    my $tmpDir = "/data/releases/tmp/release-$channelName/$releaseName";
     File::Path::make_path($tmpDir);
 
     write_file("$tmpDir/src-url", $evalUrl);
@@ -74,18 +92,6 @@ if (-d $releaseDir) {
         write_file("$tmpDir/store-paths", join("\n", uniq(@{$storePaths})) . "\n");
     }
 
-    # Copy the manual.
-    my $manualJob = $channelName =~ /nixos/ ? "nixos.manual.x86_64-linux" : "manual";
-    my $manualDir = $channelName =~ /nixos/ ? "nixos" : "nixpkgs";
-    if (! -e "$tmpDir/manual") {
-        my $manualInfo = decode_json(fetch("$evalUrl/job/$manualJob", 'application/json'));
-        my $manualPath = $manualInfo->{buildoutputs}->{out}->{path} or die;
-        system("nix-store", "-r", $manualPath) == 0 or die "unable to fetch $manualPath\n";
-        system("cp", "-rd", "$manualPath/share/doc/$manualDir", "$tmpDir/manual") == 0 or die "unable to copy manual from $manualPath";
-        system("chmod", "-R", "u+w", "$tmpDir/manual");
-        symlink("manual.html", "$tmpDir/manual/index.html") unless -e "$tmpDir/manual/index.html";
-    }
-
     sub downloadFile {
         my ($jobName, $dstName) = @_;
 
@@ -95,22 +101,24 @@ if (-d $releaseDir) {
         $dstName //= basename($srcFile);
         my $dstFile = "$tmpDir/" . $dstName;
 
+        my $sha256_expected = $buildInfo->{buildproducts}->{1}->{sha256hash} or die;
+
         if (! -e $dstFile) {
             print STDERR "downloading $srcFile to $dstFile...\n";
+            write_file("$dstFile.sha256", $sha256_expected);
             system("NIX_REMOTE=https://cache.nixos.org/ nix cat-store '$srcFile' > '$dstFile.tmp'") == 0
                 or die "unable to fetch $srcFile\n";
             rename("$dstFile.tmp", $dstFile) or die;
         }
 
-        my $sha256_expected = $buildInfo->{buildproducts}->{1}->{sha256hash} or die;
-        my $sha256_actual = `nix hash-file --type sha256 '$dstFile'`;
-        chomp $sha256_actual;
-        if ($sha256_expected ne $sha256_actual) {
-            print STDERR "file $dstFile is corrupt\n";
-            exit 1;
+        if (-e "$dstFile.sha256") {
+            my $sha256_actual = `nix hash-file --type sha256 '$dstFile'`;
+            chomp $sha256_actual;
+            if ($sha256_expected ne $sha256_actual) {
+                print STDERR "file $dstFile is corrupt $sha256_expected $sha256_actual\n";
+                exit 1;
+            }
         }
-
-        write_file("$dstFile.sha256", $sha256_expected);
     }
 
     if ($channelName =~ /nixos/) {
@@ -129,19 +137,14 @@ if (-d $releaseDir) {
         downloadFile("tarball", "nixexprs.tar.xz");
     }
 
-    # Make "github-link" a redirect to the GitHub history of this
-    # release.
-    write_file("$tmpDir/.htaccess",
-               "Redirect /releases/$channelDirRel/$releaseName/github-link https://github.com/NixOS/nixpkgs-channels/commits/$rev\n");
-    write_file("$tmpDir/github-link", "");
-
     # Generate the programs.sqlite database and put it in nixexprs.tar.xz.
-    if ($channelName =~ /nixos/) {
+    if ($channelName =~ /nixos/ && -e "$tmpDir/store-paths") {
         File::Path::make_path("$tmpDir/unpack");
         system("tar", "xfJ", "$tmpDir/nixexprs.tar.xz", "-C", "$tmpDir/unpack") == 0 or die;
         my $exprDir = glob("$tmpDir/unpack/*");
         system("generate-programs-index $filesCache $exprDir/programs.sqlite http://nix-cache.s3.amazonaws.com/ $tmpDir/store-paths $exprDir/nixpkgs") == 0 or die;
         system("rm -f $tmpDir/nixexprs.tar.xz $exprDir/programs.sqlite-journal") == 0 or die;
+        unlink("$tmpDir/nixexprs.tar.xz.sha256");
         system("tar", "cfJ", "$tmpDir/nixexprs.tar.xz", "-C", "$tmpDir/unpack", basename($exprDir)) == 0 or die;
         system("rm -rf $tmpDir/unpack") == 0 or die;
     }
@@ -150,7 +153,29 @@ if (-d $releaseDir) {
         system("xz", "$tmpDir/store-paths") == 0 or die;
     }
 
-    rename($tmpDir, $releaseDir) or die;
+    # Upload the release to S3.
+    for my $fn (glob("$tmpDir/*")) {
+        my $key = "$releasePrefix/" . basename $fn;
+        unless (defined $bucket->head_key($key)) {
+            print STDERR "mirroring $fn to s3://$bucketName/$key...\n";
+            $bucket->add_key_filename(
+                $key, $fn,
+                { content_type => $fn =~ /.sha256|src-url|binary-cache-url|git-revision/ ? "text/plain" : "application/octet-stream" })
+                or die $bucket->err . $bucket->errstr;
+        }
+    }
+
+    # Make "github-link" a redirect to the GitHub history of this
+    # release.
+    my $link = "https://github.com/NixOS/nixpkgs-channels/commits/$rev";
+    $bucket->add_key(
+        "$releasePrefix/github-link", $link,
+        { 'x-amz-website-redirect-location' => $link,
+          content_type => "text/plain"
+        })
+        or die $bucket->err . $bucket->errstr;
+
+    File::Path::remove_tree($tmpDir);
 }
 
 # Prevent concurrent writes to the channels and the Git clone.
@@ -159,13 +184,14 @@ flock($lockfile, LOCK_EX) or die "cannot acquire channels lock\n";
 
 # Update the channel.
 my $htaccess = "$channelsDir/.htaccess-$channelName";
+my $target = "https://d3g5gsiof5omrk.cloudfront.net/$releasePrefix";
 write_file($htaccess,
-           "Redirect /channels/$channelName /releases/$channelDirRel/$releaseName\n" .
-           "Redirect /releases/nixos/channels/$channelName /releases/$channelDirRel/$releaseName\n");
+           "Redirect /channels/$channelName $target\n" .
+           "Redirect /releases/nixos/channels/$channelName $target\n");
 
 my $channelLink = "$channelsDir/$channelName";
 unlink("$channelLink.tmp");
-symlink($releaseDir, "$channelLink.tmp") or die;
+write_file("$channelLink.tmp", "$target");
 rename("$channelLink.tmp", $channelLink) or die;
 
 system("cat $channelsDir/.htaccess-nix* > $channelsDir/.htaccess.tmp") == 0 or die;
@@ -174,32 +200,3 @@ rename("$channelsDir/.htaccess.tmp", "$channelsDir/.htaccess") or die;
 # Update the nixpkgs-channels repo.
 system("git remote update origin >&2") == 0 or die;
 system("git push channels $rev:refs/heads/$channelName >&2") == 0 or die;
-
-# If this is the "main" stable release, generate a .htaccess with some
-# symbolic redirects to the latest ISOs.
-
-if ($isMainRelease) {
-
-    my $baseURL = "/releases/$channelDirRel/$releaseName";
-    my $res = "Redirect /releases/nixos/latest $baseURL\n";
-
-    sub add {
-        my ($name, $wildcard) = @_;
-        my @files = glob "$releaseDir/$wildcard";
-        die if scalar @files != 1;
-        my $fn = basename($files[0]);
-        $res .= "Redirect /releases/nixos/$name $baseURL/$fn\n";
-        $res .= "Redirect /releases/nixos/$name-sha256 $baseURL/$fn.sha256\n";
-    }
-
-    add("latest-iso-minimal-i686-linux", "nixos-minimal-*-i686-linux.iso");
-    add("latest-iso-minimal-x86_64-linux", "nixos-minimal-*-x86_64-linux.iso");
-    #add("latest-iso-graphical-i686-linux", "nixos-graphical-*-i686-linux.iso");
-    add("latest-iso-graphical-x86_64-linux", "nixos-graphical-*-x86_64-linux.iso");
-    #add("latest-ova-i686-linux", "nixos-*-i686-linux.ova");
-    add("latest-ova-x86_64-linux", "nixos-*-x86_64-linux.ova");
-
-    my $htaccess2 = "/data/releases/nixos/.htaccess";
-    write_file("$htaccess2.tmp", $res);
-    rename("$htaccess2.tmp", $htaccess2) or die;
-}
