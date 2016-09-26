@@ -161,8 +161,15 @@ if ($bucket->head_key("$releasePrefix/github-link")) {
             $bucket->add_key_filename(
                 $key, $fn,
                 { content_type => $fn =~ /.sha256|src-url|binary-cache-url|git-revision/ ? "text/plain" : "application/octet-stream" })
-                or die $bucket->err . $bucket->errstr;
+                or die $bucket->err . ": " . $bucket->errstr;
         }
+    }
+
+    # Add dummy files at $releasePrefix to prevent nix-channel from barfing.
+    for my $key ($releasePrefix, "$releasePrefix/") {
+        $bucket->add_key("$key", "nix-channel compatibility placeholder",
+            { content_type => "text/plain" })
+            or die $bucket->err . ": " . $bucket->errstr;
     }
 
     # Make "github-link" a redirect to the GitHub history of this
@@ -173,7 +180,7 @@ if ($bucket->head_key("$releasePrefix/github-link")) {
         { 'x-amz-website-redirect-location' => $link,
           content_type => "text/plain"
         })
-        or die $bucket->err . $bucket->errstr;
+        or die $bucket->err . ": " . $bucket->errstr;
 
     File::Path::remove_tree($tmpDir);
 }
