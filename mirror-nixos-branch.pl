@@ -197,9 +197,10 @@ write_file($htaccess,
            "Redirect /releases/nixos/channels/$channelName $target\n");
 
 my $channelLink = "$channelsDir/$channelName";
-unlink("$channelLink.tmp");
-write_file("$channelLink.tmp", "$target");
-rename("$channelLink.tmp", $channelLink) or die;
+if ((read_file($channelLink, err_mode => 'quiet') // "") ne $target) {
+    write_file("$channelLink.tmp", "$target");
+    rename("$channelLink.tmp", $channelLink) or die;
+}
 
 system("cat $channelsDir/.htaccess-nix* > $channelsDir/.htaccess.tmp") == 0 or die;
 rename("$channelsDir/.htaccess.tmp", "$channelsDir/.htaccess") or die;
