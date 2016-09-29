@@ -3,14 +3,17 @@
 use strict;
 use warnings;
 use Data::Dumper;
+use Digest::SHA;
 use Fcntl qw(:flock);
 use File::Basename;
 use File::Path;
 use File::Slurp;
+use File::stat;
 use JSON::PP;
 use LWP::UserAgent;
 use List::MoreUtils qw(uniq);
 use Net::Amazon::S3;
+use POSIX qw(strftime);
 
 my $channelName = $ARGV[0];
 my $releaseUrl = $ARGV[1];
@@ -153,9 +156,22 @@ if ($bucket->head_key("$releasePrefix/github-link")) {
         system("xz", "$tmpDir/store-paths") == 0 or die;
     }
 
+    my $now = strftime("%F %T", localtime);
+    my $title = "$channelName release $releaseName";
+    my $githubLink = "https://github.com/NixOS/nixpkgs-channels/commits/$rev";
+
+    my $html = "<html><head>";
+    $html .= "<title>$title</title></head>";
+    $html .= "<body><h1>$title</h1>";
+    $html .= "<p>Released on $now from <a href='$githubLink'>Git commit <tt>$rev</tt></a> ";
+    $html .= "via <a href='$evalUrl'>Hydra evaluation $evalId</a>.</p>";
+    $html .= "<table><thead><tr><th>File name</th><th>Size</th><th>SHA-512 hash</th></tr></thead><tbody>";
+
     # Upload the release to S3.
-    for my $fn (glob("$tmpDir/*")) {
-        my $key = "$releasePrefix/" . basename $fn;
+    for my $fn (sort glob("$tmpDir/*")) {
+        my $basename = basename $fn;
+        my $key = "$releasePrefix/" . $basename;
+
         unless (defined $bucket->head_key($key)) {
             print STDERR "mirroring $fn to s3://$bucketName/$key...\n";
             $bucket->add_key_filename(
@@ -163,23 +179,22 @@ if ($bucket->head_key("$releasePrefix/github-link")) {
                 { content_type => $fn =~ /.sha256|src-url|binary-cache-url|git-revision/ ? "text/plain" : "application/octet-stream" })
                 or die $bucket->err . ": " . $bucket->errstr;
         }
+
+        next if $basename =~ /.sha256$/;
+
+        my $size = stat($fn)->size;
+        my $sha256 = Digest::SHA::sha256_hex(read_file($fn));
+        $html .= "<tr>";
+        $html .= "<td><a href='/$key'>$basename</a></td>";
+        $html .= "<td align='right'>$size</td>";
+        $html .= "<td><tt>$sha256</tt></td>";
+        $html .= "</tr>";
     }
 
-    # Add dummy files at $releasePrefix to prevent nix-channel from barfing.
-    for my $key ($releasePrefix, "$releasePrefix/") {
-        $bucket->add_key("$key", "nix-channel compatibility placeholder",
-            { content_type => "text/plain" })
-            or die $bucket->err . ": " . $bucket->errstr;
-    }
+    $html .= "</tbody></table></body></html>";
 
-    # Make "github-link" a redirect to the GitHub history of this
-    # release.
-    my $link = "https://github.com/NixOS/nixpkgs-channels/commits/$rev";
-    $bucket->add_key(
-        "$releasePrefix/github-link", $link,
-        { 'x-amz-website-redirect-location' => $link,
-          content_type => "text/plain"
-        })
+    $bucket->add_key($releasePrefix, $html,
+                     { content_type => "text/html" })
         or die $bucket->err . ": " . $bucket->errstr;
 
     File::Path::remove_tree($tmpDir);
