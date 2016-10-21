@@ -84,7 +84,7 @@ if (defined $curReleaseDir) {
 system("git remote update origin >&2") == 0 or die;
 system("git push channels $rev:refs/heads/$channelName >&2") == 0 or die;
 
-if ($bucket->head_key("$releasePrefix/github-link")) {
+if ($bucket->head_key("$releasePrefix")) {
     print STDERR "release already exists\n";
 } else {
     my $tmpDir = "/data/releases/tmp/release-$channelName/$releaseName";
