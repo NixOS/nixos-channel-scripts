@@ -80,6 +80,10 @@ if (defined $curReleaseDir) {
     die "channel would go back in time from $curRelease to $releaseName, bailing out\n" if $d == 1;
 }
 
+# Update the nixpkgs-channels repo. FIXME: lock?
+system("git remote update origin >&2") == 0 or die;
+system("git push channels $rev:refs/heads/$channelName >&2") == 0 or die;
+
 if ($bucket->head_key("$releasePrefix/github-link")) {
     print STDERR "release already exists\n";
 } else {
@@ -200,7 +204,7 @@ if ($bucket->head_key("$releasePrefix/github-link")) {
     File::Path::remove_tree($tmpDir);
 }
 
-# Prevent concurrent writes to the channels and the Git clone.
+# Prevent concurrent writes to the channels directory.
 open(my $lockfile, ">>", "$channelsDir/.htaccess.lock");
 flock($lockfile, LOCK_EX) or die "cannot acquire channels lock\n";
 
@@ -219,7 +223,3 @@ if ((read_file($channelLink, err_mode => 'quiet') // "") ne $target) {
 
 system("cat $channelsDir/.htaccess-nix* > $channelsDir/.htaccess.tmp") == 0 or die;
 rename("$channelsDir/.htaccess.tmp", "$channelsDir/.htaccess") or die;
-
-# Update the nixpkgs-channels repo.
-system("git remote update origin >&2") == 0 or die;
-system("git push channels $rev:refs/heads/$channelName >&2") == 0 or die;
