@@ -145,7 +145,7 @@ if ($bucket->head_key("$releasePrefix")) {
     }
 
     # Generate the programs.sqlite database and put it in nixexprs.tar.xz.
-    if (0 && $channelName =~ /nixos/ && -e "$tmpDir/store-paths") {
+    if ($channelName =~ /nixos/ && -e "$tmpDir/store-paths") {
         File::Path::make_path("$tmpDir/unpack");
         system("tar", "xfJ", "$tmpDir/nixexprs.tar.xz", "-C", "$tmpDir/unpack") == 0 or die;
         my $exprDir = glob("$tmpDir/unpack/*");
