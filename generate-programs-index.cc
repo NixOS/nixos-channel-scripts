@@ -10,10 +10,15 @@
 #include "fs-accessor.hh"
 #include "thread-pool.hh"
 #include "sqlite.hh"
+#include "download.hh"
+#include "compression.hh"
+
+#include <nlohmann/json.hpp>
 
 #include <sqlite3.h>
 
 using namespace nix;
+using json = nlohmann::json;
 
 static const char * cacheSchema = R"sql(
 
@@ -62,7 +67,9 @@ void mainWrapped(int argc, char * * argv)
     settings.showTrace = true;
 
     auto localStore = openStore();
-    auto binaryCache = openStoreAt(argv[3]);
+    std::string binaryCacheUri = argv[3];
+    if (hasSuffix(binaryCacheUri, "/")) binaryCacheUri.pop_back();
+    auto binaryCache = openStoreAt(binaryCacheUri);
 
     struct CacheState
     {
@@ -172,6 +179,7 @@ void mainWrapped(int argc, char * * argv)
     auto getFiles = [&](const Path & storePath) {
         std::map<std::string, FSAccessor::Stat> files;
 
+        /* Look up the path in the SQLite cache. */
         {
             auto cacheState(cacheState_.lock());
             auto useQueryPath(cacheState->queryPath.use()(storePath));
@@ -186,29 +194,42 @@ void mainWrapped(int argc, char * * argv)
             }
         }
 
-        auto accessor = binaryCache->getFSAccessor();
+        /* It's not in the cache, so get the .ls.xz file (which
+           contains a JSON serialisation of the listing of the NAR
+           contents) from the binary cache. */
+        auto now1 = std::chrono::steady_clock::now();
+        DownloadRequest req(binaryCacheUri + "/" + storePathToHash(storePath) + ".ls.xz");
+        req.showProgress = DownloadRequest::no;
+        auto ls = json::parse(*decompress("xz", *getDownloader()->download(req).data));
 
-        /* Get the NAR of the store path and enumerate all files
-           inside it. */
-        std::function<void(const Path &, const std::string &)> recurse;
+        if (ls.value("version", 0) != 1)
+            throw Error("NAR index for ‘%s’ has an unsupported version", storePath);
 
-        recurse = [&](const Path & curPath,
-            const std::string & relPath)
-        {
-            auto st = accessor->stat(curPath);
+        std::function<void(const std::string &, json &)> recurse;
+
+        recurse = [&](const std::string & relPath, json & v) {
+            FSAccessor::Stat st;
+
+            std::string type = v["type"];
+
+            if (type == "directory") {
+                st.type = FSAccessor::Type::tDirectory;
+                for (auto i = v["entries"].begin(); i != v["entries"].end(); ++i) {
+                    std::string name = i.key();
+                    recurse(relPath.empty() ? name : relPath + "/" + name, i.value());
+                }
+            } else if (type == "regular") {
+                st.type = FSAccessor::Type::tRegular;
+                st.fileSize = v["size"];
+                st.isExecutable = v.value("executable", false);
+            } else if (type == "symlink") {
+                st.type = FSAccessor::Type::tSymlink;
+            } else return;
+
             files[relPath] = st;
-            if (st.type == FSAccessor::Type::tDirectory) {
-                for (auto & name : accessor->readDirectory(curPath))
-                    recurse(curPath + "/" + name, relPath.empty() ? name : relPath + "/" + name);
-            }
         };
 
-        auto now1 = std::chrono::steady_clock::now();
-        recurse(storePath, "");
-        auto now2 = std::chrono::steady_clock::now();
-        printMsg(lvlInfo, format("processed %s in %d ms")
-            % storePath
-            % std::chrono::duration_cast<std::chrono::milliseconds>(now2 - now1).count());
+        recurse("", ls.at("root"));
 
         /* Insert the store path into the database. */
         {
@@ -231,6 +252,10 @@ void mainWrapped(int argc, char * * argv)
 
             txn.commit();
         }
+
+        auto now2 = std::chrono::steady_clock::now();
+        printInfo("processed %s in %d ms", storePath,
+            std::chrono::duration_cast<std::chrono::milliseconds>(now2 - now1).count());
 
         return files;
     };
@@ -267,14 +292,13 @@ void mainWrapped(int argc, char * * argv)
                 txn.commit();
             }
 
-        } catch (InvalidPath & e) {
-            printMsg(lvlTalkative, format("warning: %s (%s) not in binary cache") % package->attrPath % storePath);
-            return;
+        } catch (DownloadError & e) {
+            printInfo("warning: no listing of %s (%s) in binary cache", package->attrPath, storePath);
         }
     };
 
     /* Enqueue work items for each package. */
-    ThreadPool threadPool;
+    ThreadPool threadPool(16);
 
     for (auto & i : packagesByPath)
         threadPool.enqueue(std::bind(doPath, i.first, i.second));
