@@ -5,7 +5,7 @@ with pkgs;
 let
 
   # FIXME
-  nix = builtins.storePath /nix/store/b554awsd9vssb936mb32icgpfbyifsai-nix-1.12pre1234_abcdef;
+  nix = builtins.storePath /nix/store/cvrdgdx0gzdi0yf2831f4j98d518m3ln-nix-1.12pre1234_abcdef;
   #lib.overrideDerivation nixUnstable (orig: {
   #  src = /home/eelco/Dev/nix;
   #});

@@ -69,7 +69,7 @@ void mainWrapped(int argc, char * * argv)
     auto localStore = openStore();
     std::string binaryCacheUri = argv[3];
     if (hasSuffix(binaryCacheUri, "/")) binaryCacheUri.pop_back();
-    auto binaryCache = openStoreAt(binaryCacheUri);
+    auto binaryCache = openStore(binaryCacheUri);
 
     struct CacheState
     {
@@ -83,9 +83,7 @@ void mainWrapped(int argc, char * * argv)
     auto allowedPaths = tokenizeString<PathSet>(readFile(storePathsFile, true));
 
     PathSet allowedPathsClosure;
-    for (auto & path : allowedPaths)
-        if (!allowedPathsClosure.count(path))
-            binaryCache->computeFSClosure(path, allowedPathsClosure);
+    binaryCache->computeFSClosure(allowedPaths, allowedPathsClosure);
 
     printMsg(lvlInfo, format("%d top-level paths, %d paths in closure")
         % allowedPaths.size() % allowedPathsClosure.size());
