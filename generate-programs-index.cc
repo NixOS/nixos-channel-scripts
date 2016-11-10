@@ -50,6 +50,7 @@ static const char * programsSchema = R"sql(
 
 )sql";
 
+MakeError(BadJSON, Error);
 
 void mainWrapped(int argc, char * * argv)
 {
@@ -198,7 +199,15 @@ void mainWrapped(int argc, char * * argv)
         auto now1 = std::chrono::steady_clock::now();
         DownloadRequest req(binaryCacheUri + "/" + storePathToHash(storePath) + ".ls.xz");
         req.showProgress = DownloadRequest::no;
-        auto ls = json::parse(*decompress("xz", *getDownloader()->download(req).data));
+        json ls;
+        try {
+            ls = json::parse(*decompress("xz", *getDownloader()->download(req).data));
+        } catch (std::invalid_argument & e) {
+            // FIXME: some filenames have non-UTF8 characters in them,
+            // which is not supported by nlohmann::json. So we have to
+            // skip the entire package.
+            throw BadJSON(e.what());
+        }
 
         if (ls.value("version", 0) != 1)
             throw Error("NAR index for ‘%s’ has an unsupported version", storePath);
@@ -292,6 +301,8 @@ void mainWrapped(int argc, char * * argv)
 
         } catch (DownloadError & e) {
             printInfo("warning: no listing of %s (%s) in binary cache", package->attrPath, storePath);
+        } catch (BadJSON & e) {
+            printError("error: in %s (%s): %s", package->attrPath, storePath, e.what());
         }
     };
 
