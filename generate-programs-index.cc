@@ -313,6 +313,12 @@ void mainWrapped(int argc, char * * argv)
         threadPool.enqueue(std::bind(doPath, i.first, i.second));
 
     threadPool.process();
+
+    /* Vacuum programs.sqlite to make it smaller. */
+    {
+        auto programsState(programsState_.lock());
+        programsState->db.exec("vacuum");
+    }
 }
 
 int main(int argc, char * * argv)
