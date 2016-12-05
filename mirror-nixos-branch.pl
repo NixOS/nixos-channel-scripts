@@ -80,9 +80,14 @@ if (defined $curReleaseDir) {
     die "channel would go back in time from $curRelease to $releaseName, bailing out\n" if $d == 1;
 }
 
-# Update the nixpkgs-channels repo. FIXME: lock?
+# Update the nixpkgs-channels repo.
+open(my $lockfile, ">>", "$channelsDir/.htaccess.lock");
+flock($lockfile, LOCK_EX) or die "cannot acquire channels lock\n";
+
 system("git remote update origin >&2") == 0 or die;
 system("git push channels $rev:refs/heads/$channelName >&2") == 0 or die;
+
+flock($lockfile, LOCK_UN) or die "cannot release channels lock\n";
 
 if ($bucket->head_key("$releasePrefix")) {
     print STDERR "release already exists\n";
@@ -205,7 +210,6 @@ if ($bucket->head_key("$releasePrefix")) {
 }
 
 # Prevent concurrent writes to the channels directory.
-open(my $lockfile, ">>", "$channelsDir/.htaccess.lock");
 flock($lockfile, LOCK_EX) or die "cannot acquire channels lock\n";
 
 # Update the channel.
