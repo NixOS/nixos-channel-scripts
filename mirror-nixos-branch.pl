@@ -4,6 +4,7 @@ use strict;
 use warnings;
 use Data::Dumper;
 use Digest::SHA;
+use HTTP::Request;
 use Fcntl qw(:flock);
 use File::Basename;
 use File::Path;
@@ -89,9 +90,41 @@ system("git push channels $rev:refs/heads/$channelName >&2") == 0 or die;
 
 flock($lockfile, LOCK_UN) or die "cannot release channels lock\n";
 
+sub github_post {
+    my ($url, $content) = @_;
+    my $token = $ENV{'GITHUB_OAUTH_TOKEN'} or die "set GITHUB_OAUTH_TOKEN to an API token with repo_deployment privileges";
+
+    my $ua = LWP::UserAgent->new;
+    my $req = HTTP::Request->new('POST', $url);
+    $req->header('Accept' => 'application/json');
+    $req->header('Content-Type' => 'application/json');
+    $req->header('Authorization' => "token $token");
+    $req->content(encode_json($content));
+
+    my $res = $ua->request($req);
+
+    die "could not post to GitHub $url: ", $res->status_line, "\n" unless $res->is_success;
+
+    return decode_json($res->decoded_content);
+}
+
 if ($bucket->head_key("$releasePrefix")) {
     print STDERR "release already exists\n";
 } else {
+    my $deploy_resp = github_post("https://api.github.com/repos/NixOS/nixpkgs/deployments",
+                                  {
+                                      'ref' => $rev,
+                                      'required_contexts' => [],
+                                      'auto_merge' => \0,
+                                      'environment' => $channel_name
+                                  }
+        );
+    github_post($deploy_resp->{statuses_url},
+                {
+                    'state' => 'success'
+                }
+        );
+
     my $tmpDir = "/data/releases/tmp/release-$channelName/$releaseName";
     File::Path::make_path($tmpDir);
 
