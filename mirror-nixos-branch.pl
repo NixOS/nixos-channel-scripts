@@ -174,7 +174,7 @@ if ($bucket->head_key("$releasePrefix")) {
     $html .= "<body><h1>$title</h1>";
     $html .= "<p>Released on $now from <a href='$githubLink'>Git commit <tt>$rev</tt></a> ";
     $html .= "via <a href='$evalUrl'>Hydra evaluation $evalId</a>.</p>";
-    $html .= "<table><thead><tr><th>File name</th><th>Size</th><th>SHA-512 hash</th></tr></thead><tbody>";
+    $html .= "<table><thead><tr><th>File name</th><th>Size</th><th>SHA-256 hash</th></tr></thead><tbody>";
 
     # Upload the release to S3.
     for my $fn (sort glob("$tmpDir/*")) {
