@@ -1,3 +1,5 @@
+#include <nix/config.h>
+
 #include <chrono>
 #include <regex>
 
