@@ -14,6 +14,7 @@
 #include "sqlite.hh"
 #include "download.hh"
 #include "compression.hh"
+#include "binary-cache-store.hh"
 
 #include <nlohmann/json.hpp>
 
@@ -72,7 +73,7 @@ void mainWrapped(int argc, char * * argv)
     auto localStore = openStore();
     std::string binaryCacheUri = argv[3];
     if (hasSuffix(binaryCacheUri, "/")) binaryCacheUri.pop_back();
-    auto binaryCache = openStore(binaryCacheUri);
+    auto binaryCache = openStore(binaryCacheUri).cast<BinaryCacheStore>();
 
     struct CacheState
     {
@@ -121,6 +122,8 @@ void mainWrapped(int argc, char * * argv)
 
     Sync<ProgramsState> programsState_;
 
+    unlink(programsDbPath.c_str());
+
     {
         auto programsState(programsState_.lock());
 
@@ -136,7 +139,7 @@ void mainWrapped(int argc, char * * argv)
     EvalState state({}, localStore);
 
     Value vRoot;
-    state.eval(state.parseExprFromFile(resolveExprPath(nixpkgsPath)), vRoot);
+    state.eval(state.parseExprFromFile(resolveExprPath(absPath(nixpkgsPath))), vRoot);
 
     /* Get all derivations. */
     DrvInfos packages;
@@ -195,25 +198,6 @@ void mainWrapped(int argc, char * * argv)
             }
         }
 
-        /* It's not in the cache, so get the .ls.xz file (which
-           contains a JSON serialisation of the listing of the NAR
-           contents) from the binary cache. */
-        auto now1 = std::chrono::steady_clock::now();
-        DownloadRequest req(binaryCacheUri + "/" + storePathToHash(storePath) + ".ls.xz");
-        req.showProgress = DownloadRequest::no;
-        json ls;
-        try {
-            ls = json::parse(*decompress("xz", *getDownloader()->download(req).data));
-        } catch (std::invalid_argument & e) {
-            // FIXME: some filenames have non-UTF8 characters in them,
-            // which is not supported by nlohmann::json. So we have to
-            // skip the entire package.
-            throw BadJSON(e.what());
-        }
-
-        if (ls.value("version", 0) != 1)
-            throw Error("NAR index for ‘%s’ has an unsupported version", storePath);
-
         std::function<void(const std::string &, json &)> recurse;
 
         recurse = [&](const std::string & relPath, json & v) {
@@ -238,7 +222,28 @@ void mainWrapped(int argc, char * * argv)
             files[relPath] = st;
         };
 
-        recurse("", ls.at("root"));
+        /* It's not in the cache, so get the .ls.xz file (which
+           contains a JSON serialisation of the listing of the NAR
+           contents) from the binary cache. */
+        auto now1 = std::chrono::steady_clock::now();
+        auto s = binaryCache->getFile(storePathToHash(storePath) + ".ls");
+        if (!s)
+            printInfo("warning: no listing of %s in binary cache", storePath);
+        else {
+            try {
+                json ls = json::parse(*s);
+
+                if (ls.value("version", 0) != 1)
+                    throw Error("NAR index for ‘%s’ has an unsupported version", storePath);
+
+                recurse("", ls.at("root"));
+            } catch (std::invalid_argument & e) {
+                // FIXME: some filenames have non-UTF8 characters in them,
+                // which is not supported by nlohmann::json. So we have to
+                // skip the entire package.
+                throw BadJSON(e.what());
+            }
+        }
 
         /* Insert the store path into the database. */
         {
@@ -301,8 +306,6 @@ void mainWrapped(int argc, char * * argv)
                 txn.commit();
             }
 
-        } catch (DownloadError & e) {
-            printInfo("warning: no listing of %s (%s) in binary cache", package->attrPath, storePath);
         } catch (BadJSON & e) {
             printError("error: in %s (%s): %s", package->attrPath, storePath, e.what());
         }
