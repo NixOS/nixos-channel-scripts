@@ -20,7 +20,9 @@ stdenv.mkDerivation {
   buildCommand = ''
     mkdir -p $out/bin
 
-    g++ -g ${./generate-programs-index.cc} -Wall -std=c++14 -o $out/bin/generate-programs-index \
+    cp ${./file-cache.hh} file-cache.hh
+
+    g++ -g ${./generate-programs-index.cc} -Wall -std=c++14 -o $out/bin/generate-programs-index -I . \
       $(pkg-config --cflags nix-main) \
       $(pkg-config --libs nix-main) \
       $(pkg-config --libs nix-expr) \

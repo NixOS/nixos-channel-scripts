@@ -9,38 +9,14 @@
 #include "store-api.hh"
 #include "common-opts.hh"
 #include "get-drvs.hh"
-#include "fs-accessor.hh"
 #include "thread-pool.hh"
 #include "sqlite.hh"
 #include "download.hh"
-#include "compression.hh"
 #include "binary-cache-store.hh"
 
-#include <nlohmann/json.hpp>
-
-#include <sqlite3.h>
+#include "file-cache.hh"
 
 using namespace nix;
-using json = nlohmann::json;
-
-static const char * cacheSchema = R"sql(
-
-  create table if not exists StorePaths (
-    id   integer primary key autoincrement not null,
-    path text unique not null
-  );
-
-  create table if not exists StorePathContents (
-    storePath integer not null,
-    subPath text not null,
-    type integer not null,
-    fileSize integer,
-    isExecutable integer,
-    primary key (storePath, subPath),
-    foreign key (storePath) references StorePaths(id) on delete cascade
-  );
-
-)sql";
 
 static const char * programsSchema = R"sql(
 
@@ -53,14 +29,12 @@ static const char * programsSchema = R"sql(
 
 )sql";
 
-MakeError(BadJSON, Error);
-
 void mainWrapped(int argc, char * * argv)
 {
     initNix();
     initGC();
 
-    if (argc != 6) throw Error("usage: generate-programs-index CACHE-DB PROGRAMS-DB STORE-URI STORE-PATHS NIXPKGS-PATH");
+    if (argc != 6) throw Error("usage: generate-programs-index CACHE-DB PROGRAMS-DB BINARY-CACHE-URI STORE-PATHS NIXPKGS-PATH");
 
     Path cacheDbPath = argv[1];
     Path programsDbPath = argv[2];
@@ -75,14 +49,6 @@ void mainWrapped(int argc, char * * argv)
     if (hasSuffix(binaryCacheUri, "/")) binaryCacheUri.pop_back();
     auto binaryCache = openStore(binaryCacheUri).cast<BinaryCacheStore>();
 
-    struct CacheState
-    {
-        SQLite db;
-        SQLiteStmt queryPath, insertPath, queryFiles, insertFile;
-    };
-
-    Sync<CacheState> cacheState_;
-
     /* Get the allowed store paths to be included in the database. */
     auto allowedPaths = tokenizeString<PathSet>(readFile(storePathsFile, true));
 
@@ -92,26 +58,7 @@ void mainWrapped(int argc, char * * argv)
     printMsg(lvlInfo, format("%d top-level paths, %d paths in closure")
         % allowedPaths.size() % allowedPathsClosure.size());
 
-    /* Initialise the cache database. */
-    {
-        auto cacheState(cacheState_.lock());
-
-        cacheState->db = SQLite(cacheDbPath);
-        cacheState->db.exec("pragma foreign_keys = 1");
-        cacheState->db.exec(cacheSchema);
-
-        if (sqlite3_busy_timeout(cacheState->db, 60 * 60 * 1000) != SQLITE_OK)
-            throwSQLiteError(cacheState->db, "setting timeout");
-
-        cacheState->queryPath.create(cacheState->db,
-            "select id from StorePaths where path = ?");
-        cacheState->insertPath.create(cacheState->db,
-            "insert or ignore into StorePaths(path) values (?)");
-        cacheState->queryFiles.create(cacheState->db,
-            "select subPath, type, fileSize, isExecutable from StorePathContents where storePath = ?");
-        cacheState->insertFile.create(cacheState->db,
-            "insert into StorePathContents(storePath, subPath, type, fileSize, isExecutable) values (?, ?, ?, ?, ?)");
-    }
+    FileCache fileCache(cacheDbPath);
 
     /* Initialise the programs database. */
     struct ProgramsState
@@ -179,108 +126,13 @@ void mainWrapped(int argc, char * * argv)
             throw;
         }
 
-    /* Return the files in a store path, using a SQLite database to cache the results. */
-    auto getFiles = [&](const Path & storePath) {
-        std::map<std::string, FSAccessor::Stat> files;
-
-        /* Look up the path in the SQLite cache. */
-        {
-            auto cacheState(cacheState_.lock());
-            auto useQueryPath(cacheState->queryPath.use()(storePath));
-            if (useQueryPath.next()) {
-                auto id = useQueryPath.getInt(0);
-                auto useQueryFiles(cacheState->queryFiles.use()(id));
-                while (useQueryFiles.next()) {
-                    files[useQueryFiles.getStr(0)] = FSAccessor::Stat{
-                        (FSAccessor::Type) useQueryFiles.getInt(1), (uint64_t) useQueryFiles.getInt(2), useQueryFiles.getInt(3) != 0};
-                }
-                return files;
-            }
-        }
-
-        std::function<void(const std::string &, json &)> recurse;
-
-        recurse = [&](const std::string & relPath, json & v) {
-            FSAccessor::Stat st;
-
-            std::string type = v["type"];
-
-            if (type == "directory") {
-                st.type = FSAccessor::Type::tDirectory;
-                for (auto i = v["entries"].begin(); i != v["entries"].end(); ++i) {
-                    std::string name = i.key();
-                    recurse(relPath.empty() ? name : relPath + "/" + name, i.value());
-                }
-            } else if (type == "regular") {
-                st.type = FSAccessor::Type::tRegular;
-                st.fileSize = v["size"];
-                st.isExecutable = v.value("executable", false);
-            } else if (type == "symlink") {
-                st.type = FSAccessor::Type::tSymlink;
-            } else return;
-
-            files[relPath] = st;
-        };
-
-        /* It's not in the cache, so get the .ls.xz file (which
-           contains a JSON serialisation of the listing of the NAR
-           contents) from the binary cache. */
-        auto now1 = std::chrono::steady_clock::now();
-        auto s = binaryCache->getFile(storePathToHash(storePath) + ".ls");
-        if (!s)
-            printInfo("warning: no listing of %s in binary cache", storePath);
-        else {
-            try {
-                json ls = json::parse(*s);
-
-                if (ls.value("version", 0) != 1)
-                    throw Error("NAR index for ‘%s’ has an unsupported version", storePath);
-
-                recurse("", ls.at("root"));
-            } catch (std::invalid_argument & e) {
-                // FIXME: some filenames have non-UTF8 characters in them,
-                // which is not supported by nlohmann::json. So we have to
-                // skip the entire package.
-                throw BadJSON(e.what());
-            }
-        }
-
-        /* Insert the store path into the database. */
-        {
-            auto cacheState(cacheState_.lock());
-            SQLiteTxn txn(cacheState->db);
-
-            if (cacheState->queryPath.use()(storePath).next()) return files;
-            cacheState->insertPath.use()(storePath).exec();
-            uint64_t id = sqlite3_last_insert_rowid(cacheState->db);
-
-            for (auto & x : files) {
-                cacheState->insertFile.use()
-                    (id)
-                    (x.first)
-                    (x.second.type)
-                    (x.second.fileSize, x.second.type == FSAccessor::Type::tRegular)
-                    (x.second.isExecutable, x.second.type == FSAccessor::Type::tRegular)
-                    .exec();
-            }
-
-            txn.commit();
-        }
-
-        auto now2 = std::chrono::steady_clock::now();
-        printInfo("processed %s in %d ms", storePath,
-            std::chrono::duration_cast<std::chrono::milliseconds>(now2 - now1).count());
-
-        return files;
-    };
-
     /* Note: we don't index hidden files. */
     std::regex isProgram("bin/([^.][^/]*)");
 
     /* Process each store path. */
     auto doPath = [&](const Path & storePath, DrvInfo * package) {
         try {
-            auto files = getFiles(storePath);
+            auto files = fileCache.getFiles(binaryCache, storePath);
             if (files.empty()) return;
 
             std::set<std::string> programs;
