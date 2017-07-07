@@ -29,6 +29,12 @@ stdenv.mkDerivation {
       $(pkg-config --libs nix-store) \
       -lsqlite3 -lgc
 
+    g++ -g ${./index-debuginfo.cc} -Wall -std=c++14 -o $out/bin/index-debuginfo -I . \
+      $(pkg-config --cflags nix-main) \
+      $(pkg-config --libs nix-main) \
+      $(pkg-config --libs nix-store) \
+      -lsqlite3
+
     cp ${./mirror-nixos-branch.pl} $out/bin/mirror-nixos-branch
     wrapProgram $out/bin/mirror-nixos-branch --set PERL5LIB $PERL5LIB --prefix PATH : ${wget}/bin:${git}/bin:${nix}/bin:${gnutar}/bin:${xz}/bin:$out/bin
 
