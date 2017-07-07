@@ -23,6 +23,11 @@ class FileCache
 
     Sync<State> state_;
 
+    struct Stat : FSAccessor::Stat
+    {
+        std::string target;
+    };
+
 public:
 
     FileCache(const Path & path)
@@ -42,6 +47,7 @@ public:
             type integer not null,
             fileSize integer,
             isExecutable integer,
+            target text,
             primary key (storePath, subPath),
             foreign key (storePath) references StorePaths(id) on delete cascade
           );
@@ -60,17 +66,17 @@ public:
         state->insertPath.create(state->db,
             "insert or ignore into StorePaths(path) values (?)");
         state->queryFiles.create(state->db,
-            "select subPath, type, fileSize, isExecutable from StorePathContents where storePath = ?");
+            "select subPath, type, fileSize, isExecutable, target from StorePathContents where storePath = ?");
         state->insertFile.create(state->db,
-            "insert into StorePathContents(storePath, subPath, type, fileSize, isExecutable) values (?, ?, ?, ?, ?)");
+            "insert into StorePathContents(storePath, subPath, type, fileSize, isExecutable, target) values (?, ?, ?, ?, ?, ?)");
     }
 
     /* Return the files in a store path, using a SQLite database to
        cache the results. */
-    std::map<std::string, FSAccessor::Stat>
+    std::map<std::string, Stat>
     getFiles(ref<BinaryCacheStore> binaryCache, const Path & storePath)
     {
-        std::map<std::string, FSAccessor::Stat> files;
+        std::map<std::string, Stat> files;
 
         /* Look up the path in the SQLite cache. */
         {
@@ -80,8 +86,13 @@ public:
                 auto id = useQueryPath.getInt(0);
                 auto useQueryFiles(state->queryFiles.use()(id));
                 while (useQueryFiles.next()) {
-                    files[useQueryFiles.getStr(0)] = FSAccessor::Stat{
-                        (FSAccessor::Type) useQueryFiles.getInt(1), (uint64_t) useQueryFiles.getInt(2), useQueryFiles.getInt(3) != 0};
+                    Stat st;
+                    st.type = (FSAccessor::Type) useQueryFiles.getInt(1);
+                    st.fileSize = (uint64_t) useQueryFiles.getInt(2);
+                    st.isExecutable = useQueryFiles.getInt(3) != 0;
+                    if (!useQueryFiles.isNull(4))
+                        st.target = useQueryFiles.getStr(4);
+                    files.emplace(useQueryFiles.getStr(0), st);
                 }
                 return files;
             }
@@ -92,7 +103,7 @@ public:
         std::function<void(const std::string &, json &)> recurse;
 
         recurse = [&](const std::string & relPath, json & v) {
-            FSAccessor::Stat st;
+            Stat st;
 
             std::string type = v["type"];
 
@@ -108,6 +119,7 @@ public:
                 st.isExecutable = v.value("executable", false);
             } else if (type == "symlink") {
                 st.type = FSAccessor::Type::tSymlink;
+                st.target = v.value("target", "");
             } else return;
 
             files[relPath] = st;
@@ -152,6 +164,7 @@ public:
                     (x.second.type)
                     (x.second.fileSize, x.second.type == FSAccessor::Type::tRegular)
                     (x.second.isExecutable, x.second.type == FSAccessor::Type::tRegular)
+                    (x.second.target, x.second.type == FSAccessor::Type::tSymlink)
                     .exec();
             }
 

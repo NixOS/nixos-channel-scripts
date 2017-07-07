@@ -22,14 +22,14 @@ stdenv.mkDerivation {
 
     cp ${./file-cache.hh} file-cache.hh
 
-    g++ -g ${./generate-programs-index.cc} -Wall -std=c++14 -o $out/bin/generate-programs-index -I . \
+    g++ -Os -g ${./generate-programs-index.cc} -Wall -std=c++14 -o $out/bin/generate-programs-index -I . \
       $(pkg-config --cflags nix-main) \
       $(pkg-config --libs nix-main) \
       $(pkg-config --libs nix-expr) \
       $(pkg-config --libs nix-store) \
       -lsqlite3 -lgc
 
-    g++ -g ${./index-debuginfo.cc} -Wall -std=c++14 -o $out/bin/index-debuginfo -I . \
+    g++ -Os -g ${./index-debuginfo.cc} -Wall -std=c++14 -o $out/bin/index-debuginfo -I . \
       $(pkg-config --cflags nix-main) \
       $(pkg-config --libs nix-main) \
       $(pkg-config --libs nix-store) \

@@ -137,15 +137,60 @@ void mainWrapped(int argc, char * * argv)
 
             std::set<std::string> programs;
 
-            for (auto & file : files) {
-                // FIXME: we assume that symlinks point to
-                // programs. Should check that.
-                if (file.second.type == FSAccessor::Type::tDirectory ||
-                    (file.second.type == FSAccessor::Type::tRegular && !file.second.isExecutable))
-                    continue;
+            for (auto file : files) {
+
                 std::smatch match;
-                if (std::regex_match(file.first, match, isProgram))
-                    programs.insert(match[1]);
+                if (!std::regex_match(file.first, match, isProgram)) continue;
+
+                auto curPath = file.first;
+                auto stat = file.second;
+
+                while (stat.type == FSAccessor::Type::tSymlink) {
+
+                    auto target = canonPath(
+                        hasPrefix(stat.target, "/")
+                        ? stat.target
+                        : dirOf(storePath + "/" + curPath) + "/" + stat.target);
+                    // FIXME: resolve symlinks in components of stat.target.
+
+                    if (!hasPrefix(target, "/nix/store/")) break;
+
+                    /* Assume that symlinks to other store paths point
+                       to executables. But check symlinks within the
+                       same store path. */
+                    if (target.compare(0, storePath.size(), storePath) != 0) {
+                        stat.type = FSAccessor::Type::tRegular;
+                        stat.isExecutable = true;
+                        break;
+                    }
+
+                    std::string sub(target, storePath.size() + 1);
+
+                    auto file2 = files.find(sub);
+                    if (file2 == files.end()) {
+                        printError("symlink ‘%s’ has non-existent target ‘%s’",
+                            storePath + "/" + file.first, stat.target);
+                        break;
+                    }
+
+                    if (file2->second.type != FSAccessor::Type::tRegular
+                        || !file2->second.isExecutable)
+                    {
+                        printError("symlink ‘%s’ points to non-executable ‘%s’",
+                            storePath + "/" + file.first, stat.target);
+                        break;
+                    }
+
+                    curPath = sub;
+                    stat = file2->second;
+                }
+
+                if (stat.type == FSAccessor::Type::tDirectory
+                    || stat.type == FSAccessor::Type::tSymlink
+                    || (stat.type == FSAccessor::Type::tRegular && !stat.isExecutable))
+                    continue;
+
+                programs.insert(match[1]);
             }
 
             if (programs.empty()) return;
