@@ -173,14 +173,6 @@ void mainWrapped(int argc, char * * argv)
                         break;
                     }
 
-                    if (file2->second.type != FSAccessor::Type::tRegular
-                        || !file2->second.isExecutable)
-                    {
-                        printError("symlink ‘%s’ points to non-executable ‘%s’",
-                            storePath + "/" + file.first, stat.target);
-                        break;
-                    }
-
                     curPath = sub;
                     stat = file2->second;
                 }
