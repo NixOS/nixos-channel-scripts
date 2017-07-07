@@ -149,12 +149,15 @@ if ($bucket->head_key("$releasePrefix")) {
         downloadFile("tarball", "nixexprs.tar.xz");
     }
 
-    # Generate the programs.sqlite database and put it in nixexprs.tar.xz.
+    # Generate the programs.sqlite database and put it in
+    # nixexprs.tar.xz. Also maintain the debug info repository at
+    # https://cache.nixos.org/debuginfo.
     if ($channelName =~ /nixos/ && -e "$tmpDir/store-paths") {
         File::Path::make_path("$tmpDir/unpack");
         system("tar", "xfJ", "$tmpDir/nixexprs.tar.xz", "-C", "$tmpDir/unpack") == 0 or die;
         my $exprDir = glob("$tmpDir/unpack/*");
         system("generate-programs-index $filesCache $exprDir/programs.sqlite http://nix-cache.s3.amazonaws.com/ $tmpDir/store-paths $exprDir/nixpkgs") == 0 or die;
+        system("index-debuginfo $filesCache s3://nix-cache $tmpDir/store-paths") == 0 or die;
         system("rm -f $tmpDir/nixexprs.tar.xz $exprDir/programs.sqlite-journal") == 0 or die;
         unlink("$tmpDir/nixexprs.tar.xz.sha256");
         system("tar", "cfJ", "$tmpDir/nixexprs.tar.xz", "-C", "$tmpDir/unpack", basename($exprDir)) == 0 or die;
