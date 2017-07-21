@@ -191,7 +191,7 @@ void mainWrapped(int argc, char * * argv)
                 auto programsState(programsState_.lock());
                 SQLiteTxn txn(programsState->db);
                 for (auto & program : programs)
-                    programsState->insertProgram.use()(program)(package->system)(package->attrPath).exec();
+                    programsState->insertProgram.use()(program)(package->querySystem())(package->attrPath).exec();
                 txn.commit();
             }
 
