@@ -100,7 +100,7 @@ if ($bucket->head_key("$releasePrefix")) {
 
         my $buildInfo = decode_json(fetch("$evalUrl/job/$jobName", 'application/json'));
 
-        my $srcFile = $buildInfo->{buildproducts}->{1}->{path} or die;
+        my $srcFile = $buildInfo->{buildproducts}->{1}->{path} or die "job '$jobName' lacks a store path";
         $dstName //= basename($srcFile);
         my $dstFile = "$tmpDir/" . $dstName;
 
