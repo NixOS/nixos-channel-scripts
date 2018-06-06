@@ -108,7 +108,7 @@ if ($bucket->head_key("$releasePrefix")) {
 
         if (! -e $dstFile) {
             print STDERR "downloading $srcFile to $dstFile...\n";
-            write_file("$dstFile.sha256", $sha256_expected);
+            write_file("$dstFile.sha256", "$sha256_expected  $dstName");
             system("NIX_REMOTE=https://cache.nixos.org/ nix cat-store '$srcFile' > '$dstFile.tmp'") == 0
                 or die "unable to fetch $srcFile\n";
             rename("$dstFile.tmp", $dstFile) or die;
