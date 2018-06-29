@@ -62,7 +62,7 @@ my $releaseInfo = decode_json(fetch($releaseUrl, 'application/json'));
 
 my $releaseId = $releaseInfo->{id} or die;
 my $releaseName = $releaseInfo->{nixname} or die;
-my $evalId = $releaseInfo->{jobsetevals}->[0] or die;
+my $evalId = $releaseInfo->{jobsetevals}->[-1] or die;
 my $evalUrl = "https://hydra.nixos.org/eval/$evalId";
 my $evalInfo = decode_json(fetch($evalUrl, 'application/json'));
 my $releasePrefix = "$channelDirRel/$releaseName";
