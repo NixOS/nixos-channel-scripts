@@ -134,6 +134,7 @@ if ($bucket->head_key("$releasePrefix")) {
             #downloadFile("nixos.iso_graphical.i686-linux");
             downloadFile("nixos.ova.x86_64-linux");
             #downloadFile("nixos.ova.i686-linux");
+            downloadFile("nixos.netboot.x86_64-linux");
         }
 
     } else {
