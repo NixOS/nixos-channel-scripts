@@ -209,7 +209,7 @@ flock($lockfile, LOCK_EX) or die "cannot acquire channels lock\n";
 
 # Update the channel.
 my $htaccess = "$channelsDir/.htaccess-$channelName";
-my $target = "https://d3g5gsiof5omrk.cloudfront.net/$releasePrefix";
+my $target = "https://releases.nixos.org/$releasePrefix";
 write_file($htaccess,
            "Redirect /channels/$channelName $target\n" .
            "Redirect /releases/nixos/channels/$channelName $target\n");
