@@ -17,6 +17,7 @@ use POSIX qw(strftime);
 
 my $channelName = $ARGV[0];
 my $releaseUrl = $ARGV[1];
+my $useAWS = ($ENV{'AWS_DISABLE'} or "") eq "1";
 
 die "Usage: $0 CHANNEL-NAME RELEASE-URL\n" unless defined $channelName && defined $releaseUrl;
 
@@ -31,19 +32,21 @@ my $bucketName = "nix-releases";
 
 $ENV{'GIT_DIR'} = "/home/hydra-mirror/nixpkgs-channels";
 
+my $bucket;
+if ($useAWS) {
+    # S3 setup.
+    my $aws_access_key_id = $ENV{'AWS_ACCESS_KEY_ID'} or die;
+    my $aws_secret_access_key = $ENV{'AWS_SECRET_ACCESS_KEY'} or die;
 
-# S3 setup.
-my $aws_access_key_id = $ENV{'AWS_ACCESS_KEY_ID'} or die;
-my $aws_secret_access_key = $ENV{'AWS_SECRET_ACCESS_KEY'} or die;
+    my $s3 = Net::Amazon::S3->new(
+        { aws_access_key_id     => $aws_access_key_id,
+          aws_secret_access_key => $aws_secret_access_key,
+          retry                 => 1,
+          host                  => "s3-eu-west-1.amazonaws.com",
+        });
 
-my $s3 = Net::Amazon::S3->new(
-    { aws_access_key_id     => $aws_access_key_id,
-      aws_secret_access_key => $aws_secret_access_key,
-      retry                 => 1,
-      host                  => "s3-eu-west-1.amazonaws.com",
-    });
-
-my $bucket = $s3->bucket($bucketName) or die;
+    $bucket = $s3->bucket($bucketName) or die;
+}
 
 
 sub fetch {
@@ -80,7 +83,7 @@ if (defined $curReleaseDir) {
     die "channel would go back in time from $curRelease to $releaseName, bailing out\n" if $d == 1;
 }
 
-if ($bucket->head_key("$releasePrefix")) {
+if ($useAWS && $bucket->head_key("$releasePrefix")) {
     print STDERR "release already exists\n";
 } else {
     my $tmpDir = "/data/releases/tmp/release-$channelName/$releaseName";
@@ -175,7 +178,7 @@ if ($bucket->head_key("$releasePrefix")) {
         my $basename = basename $fn;
         my $key = "$releasePrefix/" . $basename;
 
-        unless (defined $bucket->head_key($key)) {
+        if ($useAWS && ! (defined $bucket->head_key($key))) {
             print STDERR "mirroring $fn to s3://$bucketName/$key...\n";
             $bucket->add_key_filename(
                 $key, $fn,
@@ -196,11 +199,13 @@ if ($bucket->head_key("$releasePrefix")) {
 
     $html .= "</tbody></table></body></html>";
 
-    $bucket->add_key($releasePrefix, $html,
-                     { content_type => "text/html" })
-        or die $bucket->err . ": " . $bucket->errstr;
+    if ($useAWS) {
+        $bucket->add_key($releasePrefix, $html,
+                         { content_type => "text/html" })
+            or die $bucket->err . ": " . $bucket->errstr;
 
-    File::Path::remove_tree($tmpDir);
+        File::Path::remove_tree($tmpDir);
+    }
 }
 
 # Prevent concurrent writes to the channels directory.
