@@ -99,25 +99,27 @@ if ($useAWS && $bucket->head_key("$releasePrefix")) {
     }
 
     sub downloadFile {
-        my ($jobName, $dstName) = @_;
+        my ($jobName, $dstBase) = @_;
 
         my $buildInfo = decode_json(fetch("$evalUrl/job/$jobName", 'application/json'));
 
-        my $srcFile = $buildInfo->{buildproducts}->{1}->{path} or die "job '$jobName' lacks a store path";
-        $dstName //= basename($srcFile);
-        my $dstFile = "$tmpDir/" . $dstName;
+        my $buildproducts = $buildInfo->{buildproducts};
+        for my $product (values %$buildproducts) {
+            my %product = %$product;
+            my $srcFile = $product->{path} or die "job '$jobName' lacks a store path";
+            my $dstName = $dstBase // basename($srcFile);
+            my $dstFile = "$tmpDir/" . $dstName;
 
-        my $sha256_expected = $buildInfo->{buildproducts}->{1}->{sha256hash} or die;
+            my $sha256_expected = $product->{sha256hash} or die "file '$srcFile' lacks an expected hash";
 
-        if (! -e $dstFile) {
-            print STDERR "downloading $srcFile to $dstFile...\n";
-            write_file("$dstFile.sha256", "$sha256_expected  $dstName");
-            system("NIX_REMOTE=https://cache.nixos.org/ nix cat-store '$srcFile' > '$dstFile.tmp'") == 0
-                or die "unable to fetch $srcFile\n";
-            rename("$dstFile.tmp", $dstFile) or die;
-        }
+            if (! -e $dstFile) {
+                print STDERR "downloading $srcFile to $dstFile...\n";
+                write_file("$dstFile.sha256", "$sha256_expected  $dstName\n");
+                system("NIX_REMOTE=https://cache.nixos.org/ nix cat-store '$srcFile' > '$dstFile.tmp'") == 0
+                    or die "unable to fetch $srcFile\n";
+                rename("$dstFile.tmp", $dstFile) or die;
+            }
 
-        if (-e "$dstFile.sha256") {
             my $sha256_actual = `nix hash-file --type sha256 '$dstFile'`;
             chomp $sha256_actual;
             if ($sha256_expected ne $sha256_actual) {
@@ -137,6 +139,11 @@ if ($useAWS && $bucket->head_key("$releasePrefix")) {
             #downloadFile("nixos.iso_graphical.i686-linux");
             downloadFile("nixos.ova.x86_64-linux");
             #downloadFile("nixos.ova.i686-linux");
+            # Netboot is currently not included in -small but maybe should be?
+            # This may fail because of nixos/hydra#580, hence wrapping in eval
+            # nixos/nixpkgs#44089 works around it, but is not backported to all channels.
+            eval { downloadFile("nixos.netboot.x86_64-linux"); };
+            warn "Could not download netboot files: $@" if $@;
         }
 
     } else {
