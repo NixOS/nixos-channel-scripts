@@ -72,13 +72,11 @@ my $rev = $evalInfo->{jobsetevalinputs}->{nixpkgs}->{revision} or die;
 print STDERR "release is ‘$releaseName’ (build $releaseId), eval is $evalId, prefix is $releasePrefix, Git commit is $rev\n";
 
 # Guard against the channel going back in time.
-my $curReleaseDir = readlink "$channelsDir/$channelName";
-if (defined $curReleaseDir) {
-    my $curRelease = basename($curReleaseDir);
-    my $d = `NIX_PATH= nix-instantiate --eval -E "builtins.compareVersions (builtins.parseDrvName \\"$curRelease\\").version (builtins.parseDrvName \\"$releaseName\\").version"`;
-    chomp $d;
-    die "channel would go back in time from $curRelease to $releaseName, bailing out\n" if $d == 1;
-}
+my @releaseUrl = split(/\//, read_file("$channelsDir/$channelName", err_mode => 'quiet') // "");
+my $curRelease = pop @releaseUrl;
+my $d = `NIX_PATH= nix-instantiate --eval -E "builtins.compareVersions (builtins.parseDrvName \\"$curRelease\\").version (builtins.parseDrvName \\"$releaseName\\").version"`;
+chomp $d;
+die "channel would go back in time from $curRelease to $releaseName, bailing out\n" if $d == 1;
 
 if ($bucket->head_key("$releasePrefix")) {
     print STDERR "release already exists\n";
