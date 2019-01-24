@@ -2,20 +2,11 @@
 
 with pkgs;
 
-let
-
-  nix = nixUnstable;
-  #lib.overrideDerivation nixUnstable (orig: {
-  #  src = /home/eelco/Dev/nix;
-  #});
-
-in
-
 stdenv.mkDerivation {
   name = "nixos-channel-scripts";
 
   buildInputs = with perlPackages;
-    [ pkgconfig nix sqlite makeWrapper perl FileSlurp LWP LWPProtocolHttps ListMoreUtils DBDSQLite NetAmazonS3 boehmgc nlohmann_json ];
+    [ pkgconfig nix sqlite makeWrapper perl FileSlurp LWP LWPProtocolHttps ListMoreUtils DBDSQLite NetAmazonS3 boehmgc nlohmann_json boost ];
 
   buildCommand = ''
     mkdir -p $out/bin
