@@ -25,8 +25,9 @@ my $channelDirRel = $channelName eq "nixpkgs-unstable" ? "nixpkgs" : "$1/$2";
 
 
 # Configuration.
-my $channelsDir = "/data/releases/channels";
-my $filesCache = "/data/releases/nixos-files.sqlite";
+my $TMPDIR = $ENV{'TMPDIR'} // "/tmp";
+my $channelsDir = "/home/hydra-mirror/channels";
+my $filesCache = "${TMPDIR}/nixos-files.sqlite";
 my $bucketName = "nix-releases";
 
 $ENV{'GIT_DIR'} = "/home/hydra-mirror/nixpkgs-channels";
@@ -72,16 +73,17 @@ my $rev = $evalInfo->{jobsetevalinputs}->{nixpkgs}->{revision} or die;
 print STDERR "release is ‘$releaseName’ (build $releaseId), eval is $evalId, prefix is $releasePrefix, Git commit is $rev\n";
 
 # Guard against the channel going back in time.
-my @releaseUrl = split(/\//, read_file("$channelsDir/$channelName", err_mode => 'quiet') // "");
-my $curRelease = pop @releaseUrl;
+my @curReleaseUrl = split(/\//, read_file("$channelsDir/$channelName", err_mode => 'quiet') // "");
+my $curRelease = pop @curReleaseUrl;
 my $d = `NIX_PATH= nix-instantiate --eval -E "builtins.compareVersions (builtins.parseDrvName \\"$curRelease\\").version (builtins.parseDrvName \\"$releaseName\\").version"`;
 chomp $d;
 die "channel would go back in time from $curRelease to $releaseName, bailing out\n" if $d == 1;
+exit if $d == 0;
 
 if ($bucket->head_key("$releasePrefix")) {
     print STDERR "release already exists\n";
 } else {
-    my $tmpDir = "/data/releases/tmp/release-$channelName/$releaseName";
+    my $tmpDir = "$TMPDIR/release-$channelName/$releaseName";
     File::Path::make_path($tmpDir);
 
     write_file("$tmpDir/src-url", $evalUrl);
@@ -226,3 +228,6 @@ system("git remote update origin >&2") == 0 or die;
 system("git push channels $rev:refs/heads/$channelName >&2") == 0 or die;
 
 flock($lockfile, LOCK_UN) or die "cannot release channels lock\n";
+
+# Upload to nixos.org.
+system("rsync -avx $channelsDir/ hydra-mirror\@nixos.org:/releases/channels/") == 0 or die;
