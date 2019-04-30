@@ -115,7 +115,7 @@ if ($bucket->head_key("$releasePrefix")) {
         }
 
         if (-e "$dstFile.sha256") {
-            my $sha256_actual = `nix hash-file --type sha256 '$dstFile'`;
+            my $sha256_actual = `nix hash-file --base16 --type sha256 '$dstFile'`;
             chomp $sha256_actual;
             if ($sha256_expected ne $sha256_actual) {
                 print STDERR "file $dstFile is corrupt $sha256_expected $sha256_actual\n";
