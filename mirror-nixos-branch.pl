@@ -223,8 +223,10 @@ if ((read_file($channelLink, err_mode => 'quiet') // "") ne $target) {
 system("cat $channelsDir/.htaccess-nix* > $channelsDir/.htaccess.tmp") == 0 or die;
 rename("$channelsDir/.htaccess.tmp", "$channelsDir/.htaccess") or die;
 
-# Update the nixpkgs-channels repo.
+# Update the nixos-* branch in the nixpkgs repo. Also update the
+# nixpkgs-channels repo for compatibility.
 system("git remote update origin >&2") == 0 or die;
+system("git push origin $rev:refs/heads/$channelName >&2") == 0 or die;
 system("git push channels $rev:refs/heads/$channelName >&2") == 0 or die;
 
 flock($lockfile, LOCK_UN) or die "cannot release channels lock\n";
