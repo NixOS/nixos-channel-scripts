@@ -226,7 +226,7 @@ rename("$channelsDir/.htaccess.tmp", "$channelsDir/.htaccess") or die;
 # Update the nixos-* branch in the nixpkgs repo. Also update the
 # nixpkgs-channels repo for compatibility.
 system("git remote update origin >&2") == 0 or die;
-system("git push origin $rev:refs/heads/channels/$channelName >&2") == 0 or die;
+system("git push origin $rev:refs/heads/$channelName >&2") == 0 or die;
 system("git push channels $rev:refs/heads/$channelName >&2") == 0 or die;
 
 flock($lockfile, LOCK_UN) or die "cannot release channels lock\n";
