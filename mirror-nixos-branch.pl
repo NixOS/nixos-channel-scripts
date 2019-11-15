@@ -77,7 +77,11 @@ my @curReleaseUrl = split(/\//, read_file("$channelsDir/$channelName", err_mode 
 my $curRelease = pop @curReleaseUrl;
 my $d = `NIX_PATH= nix-instantiate --eval -E "builtins.compareVersions (builtins.parseDrvName \\"$curRelease\\").version (builtins.parseDrvName \\"$releaseName\\").version"`;
 chomp $d;
-die "channel would go back in time from $curRelease to $releaseName, bailing out\n" if $d == 1;
+if ($d == 1) {
+    warn("channel would go back in time from $curRelease to $releaseName, bailing out\n");
+    exit;
+}
+
 exit if $d == 0;
 
 if ($bucket->head_key("$releasePrefix")) {
