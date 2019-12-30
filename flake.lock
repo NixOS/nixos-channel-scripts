@@ -1,5 +1,18 @@
 {
     "inputs": {
+        "nix": {
+            "inputs": {
+                "nixpkgs": {
+                    "inputs": {},
+                    "narHash": "sha256-HKuPcp/pBpKNBOnDlrSzObee5eB0LdzhI0RpRjTVxik=",
+                    "originalUrl": "nixpkgs/release-19.09",
+                    "url": "github:edolstra/nixpkgs/03f3def66a104a221aac8b751eeb7075374848fd"
+                }
+            },
+            "narHash": "sha256-wiOmdFFMhuBGEcAURvj7c1LAcVbO82QjcFr+5WjuNzM=",
+            "originalUrl": "nix",
+            "url": "github:NixOS/nix/c7866733d7ce2836fbb43de90dd64d17b0d20753"
+        },
         "nixpkgs": {
             "inputs": {},
             "narHash": "sha256-HKuPcp/pBpKNBOnDlrSzObee5eB0LdzhI0RpRjTVxik=",

@@ -49,13 +49,13 @@ void mainWrapped(int argc, char * * argv)
     auto binaryCache = openStore(binaryCacheUri).cast<BinaryCacheStore>();
 
     /* Get the allowed store paths to be included in the database. */
-    auto allowedPaths = tokenizeString<PathSet>(readFile(storePathsFile, true));
+    auto allowedPaths = binaryCache->parseStorePathSet(tokenizeString<PathSet>(readFile(storePathsFile, true)));
 
-    PathSet allowedPathsClosure;
+    StorePathSet allowedPathsClosure;
     binaryCache->computeFSClosure(allowedPaths, allowedPathsClosure);
 
-    printMsg(lvlInfo, format("%d top-level paths, %d paths in closure")
-        % allowedPaths.size() % allowedPathsClosure.size());
+    printMsg(lvlInfo, "%d top-level paths, %d paths in closure",
+        allowedPaths.size(), allowedPathsClosure.size());
 
     FileCache fileCache(cacheDbPath);
 
@@ -104,24 +104,25 @@ void mainWrapped(int argc, char * * argv)
 
     /* For each store path, figure out the package with the shortest
        attribute name. E.g. "nix" is preferred over "nixStable". */
-    std::map<Path, DrvInfo *> packagesByPath;
+    std::map<StorePath, DrvInfo *> packagesByPath;
 
     for (auto & package : packages)
         try {
             auto outputs = package.queryOutputs(true);
 
             for (auto & output : outputs) {
-                if (!allowedPathsClosure.count(output.second)) continue;
-                auto i = packagesByPath.find(output.second);
+                auto storePath = binaryCache->parseStorePath(output.second);
+                if (!allowedPathsClosure.count(storePath)) continue;
+                auto i = packagesByPath.find(storePath);
                 if (i != packagesByPath.end() &&
                     (i->second->attrPath.size() < package.attrPath.size() ||
-                     (i->second->attrPath.size() == package.attrPath.size() && i->second->attrPath < package.attrPath)))
+                        (i->second->attrPath.size() == package.attrPath.size() && i->second->attrPath < package.attrPath)))
                     continue;
-                packagesByPath[output.second] = &package;
+                packagesByPath.emplace(std::move(storePath), &package);
             }
         } catch (AssertionError & e) {
         } catch (Error & e) {
-            e.addPrefix(format("in package ‘%s’: ") % package.attrPath);
+            e.addPrefix(fmt("in package ‘%s’: ", package.attrPath));
             throw;
         }
 
@@ -203,7 +204,7 @@ void mainWrapped(int argc, char * * argv)
     ThreadPool threadPool(16);
 
     for (auto & i : packagesByPath)
-        threadPool.enqueue(std::bind(doPath, i.first, i.second));
+        threadPool.enqueue(std::bind(doPath, binaryCache->printStorePath(i.first), i.second));
 
     threadPool.process();
 

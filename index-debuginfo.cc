@@ -29,7 +29,7 @@ void mainWrapped(int argc, char * * argv)
     if (hasSuffix(binaryCacheUri, "/")) binaryCacheUri.pop_back();
     auto binaryCache = openStore(binaryCacheUri).cast<S3BinaryCacheStore>();
 
-    auto storePaths = tokenizeString<PathSet>(readFile(storePathsFile, true));
+    auto storePaths = binaryCache->parseStorePathSet(tokenizeString<PathSet>(readFile(storePathsFile, true)));
 
     std::regex debugFileRegex("^lib/debug/\\.build-id/[0-9a-f]{2}/[0-9a-f]{38}\\.debug$");
 
@@ -68,7 +68,7 @@ void mainWrapped(int argc, char * * argv)
                     std::string(file.first, prefix.size(), 2)  +
                     std::string(file.first, prefix.size() + 3, 38);
 
-                auto info = binaryCache->queryPathInfo(storePath).cast<const NarInfo>();
+                auto info = binaryCache->queryPathInfo(binaryCache->parseStorePath(storePath)).cast<const NarInfo>();
 
                 assert(hasPrefix(info->url, "nar/"));
 
@@ -84,8 +84,8 @@ void mainWrapped(int argc, char * * argv)
     };
 
     for (auto & storePath : storePaths)
-        if (hasSuffix(storePath, "-debug"))
-            threadPool.enqueue(std::bind(doPath, storePath));
+        if (hasSuffix(storePath.name(), "-debug"))
+            threadPool.enqueue(std::bind(doPath, binaryCache->printStorePath(storePath)));
 
     threadPool.process();
 }
