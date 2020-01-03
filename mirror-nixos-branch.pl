@@ -75,14 +75,11 @@ print STDERR "release is ‘$releaseName’ (build $releaseId), eval is $evalId,
 # Guard against the channel going back in time.
 my @curReleaseUrl = split(/\//, read_file("$channelsDir/$channelName", err_mode => 'quiet') // "");
 my $curRelease = pop @curReleaseUrl;
+$! = 0; # Clear errno to avoid reporting non-fork/exec-related issues
 my $d = `NIX_PATH= nix-instantiate --eval -E "builtins.compareVersions (builtins.parseDrvName \\"$curRelease\\").version (builtins.parseDrvName \\"$releaseName\\").version"`;
-if ($? == -1) {
-    warn("could not execute nix-instantiate ($!).\n");
-    exit 127;
-}
-if ($? > 0) {
-    warn("error while executing nix-instantiate ($?).\n");
-    exit $?;
+if ($? != 0) {
+    warn "Could not execute nix-instantiate: exit $?; errno $!\n";
+    exit 1;
 }
 chomp $d;
 if ($d == 1) {
