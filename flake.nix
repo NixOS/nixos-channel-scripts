@@ -50,7 +50,7 @@
               -lsqlite3 -lnixrust
 
             cp ${./mirror-nixos-branch.pl} $out/bin/mirror-nixos-branch
-            wrapProgram $out/bin/mirror-nixos-branch --set PERL5LIB $PERL5LIB --prefix PATH : ${wget}/bin:${git}/bin:${nix}/bin:${gnutar}/bin:${xz}/bin:${rsync}/bin:${openssh}/bin:$out/bin
+            wrapProgram $out/bin/mirror-nixos-branch --set PERL5LIB $PERL5LIB --prefix PATH : ${wget}/bin:${git}/bin:${final.nix}/bin:${gnutar}/bin:${xz}/bin:${rsync}/bin:${openssh}/bin:$out/bin
 
             patchShebangs $out/bin
           '';
