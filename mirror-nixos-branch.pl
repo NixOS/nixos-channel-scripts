@@ -139,8 +139,14 @@ if ($bucket->head_key("$releasePrefix")) {
 
         if ($channelName !~ /-small/) {
             downloadFile("nixos.iso_minimal.i686-linux");
-            downloadFile("nixos.iso_graphical.x86_64-linux");
-            #downloadFile("nixos.iso_graphical.i686-linux");
+
+            # Renamed iso_graphcial to iso_plasma5 in 20.03
+            if ($releaseName !~ /-19./) {
+                downloadFile("nixos.iso_plasma5.x86_64-linux");
+            } else {
+                downloadFile("nixos.iso_graphical.x86_64-linux");
+            }
+
             downloadFile("nixos.ova.x86_64-linux");
             #downloadFile("nixos.ova.i686-linux");
         }
