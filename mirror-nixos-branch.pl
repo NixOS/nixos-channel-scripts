@@ -247,4 +247,4 @@ system("git push channels $rev:refs/heads/$channelName >&2") == 0 or die;
 flock($lockfile, LOCK_UN) or die "cannot release channels lock\n";
 
 # Upload to nixos.org.
-system("rsync -avx $channelsDir/ hydra-mirror\@nixos.org:/releases/channels/") == 0 or die;
+system("rsync -avx $channelsDir/ hydra-mirror\@download.nixos.org:/releases/channels/") == 0 or die;
