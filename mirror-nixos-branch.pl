@@ -26,9 +26,9 @@ my $channelDirRel = $channelName eq "nixpkgs-unstable" ? "nixpkgs" : "$1/$2";
 
 # Configuration.
 my $TMPDIR = $ENV{'TMPDIR'} // "/tmp";
-my $channelsDir = "/home/hydra-mirror/channels";
 my $filesCache = "${TMPDIR}/nixos-files.sqlite";
-my $bucketName = "nix-releases";
+my $bucketReleasesName = "nix-releases";
+my $bucketChannelsName = "nix-channels";
 
 $ENV{'GIT_DIR'} = "/home/hydra-mirror/nixpkgs-channels";
 
@@ -44,7 +44,8 @@ my $s3 = Net::Amazon::S3->new(
       host                  => "s3-eu-west-1.amazonaws.com",
     });
 
-my $bucket = $s3->bucket($bucketName) or die;
+my $bucketReleases = $s3->bucket($bucketReleasesName) or die;
+my $bucketChannels = $s3->bucket($bucketChannelsName) or die;
 
 
 sub fetch {
@@ -73,8 +74,7 @@ my $rev = $evalInfo->{jobsetevalinputs}->{nixpkgs}->{revision} or die;
 print STDERR "release is ‘$releaseName’ (build $releaseId), eval is $evalId, prefix is $releasePrefix, Git commit is $rev\n";
 
 # Guard against the channel going back in time.
-my @curReleaseUrl = split(/\//, read_file("$channelsDir/$channelName", err_mode => 'quiet') // "");
-my $curRelease = pop @curReleaseUrl;
+my $curRelease = $bucketChannels.get_key($channelName) or "";
 $! = 0; # Clear errno to avoid reporting non-fork/exec-related issues
 my $d = `NIX_PATH= nix-instantiate --eval -E "builtins.compareVersions (builtins.parseDrvName \\"$curRelease\\").version (builtins.parseDrvName \\"$releaseName\\").version"`;
 if ($? != 0) {
@@ -89,7 +89,7 @@ if ($d == 1) {
 
 exit if $d == 0;
 
-if ($bucket->head_key("$releasePrefix")) {
+if ($bucketReleases->head_key("$releasePrefix")) {
     print STDERR "release already exists\n";
 } else {
     my $tmpDir = "$TMPDIR/release-$channelName/$releaseName";
@@ -190,12 +190,12 @@ if ($bucket->head_key("$releasePrefix")) {
         my $basename = basename $fn;
         my $key = "$releasePrefix/" . $basename;
 
-        unless (defined $bucket->head_key($key)) {
-            print STDERR "mirroring $fn to s3://$bucketName/$key...\n";
-            $bucket->add_key_filename(
+        unless (defined $bucketReleases->head_key($key)) {
+            print STDERR "mirroring $fn to s3://$bucketReleasesName/$key...\n";
+            $bucketReleases->add_key_filename(
                 $key, $fn,
                 { content_type => $fn =~ /.sha256|src-url|binary-cache-url|git-revision/ ? "text/plain" : "application/octet-stream" })
-                or die $bucket->err . ": " . $bucket->errstr;
+                or die $bucketReleases->err . ": " . $bucketReleases->errstr;
         }
 
         next if $basename =~ /.sha256$/;
@@ -211,32 +211,12 @@ if ($bucket->head_key("$releasePrefix")) {
 
     $html .= "</tbody></table></body></html>";
 
-    $bucket->add_key($releasePrefix, $html,
+    $bucketReleases->add_key($releasePrefix, $html,
                      { content_type => "text/html" })
-        or die $bucket->err . ": " . $bucket->errstr;
+        or die $bucketReleases->err . ": " . $bucketReleases->errstr;
 
     File::Path::remove_tree($tmpDir);
 }
-
-# Prevent concurrent writes to the channels directory.
-open(my $lockfile, ">>", "$channelsDir/.htaccess.lock");
-flock($lockfile, LOCK_EX) or die "cannot acquire channels lock\n";
-
-# Update the channel.
-my $htaccess = "$channelsDir/.htaccess-$channelName";
-my $target = "https://releases.nixos.org/$releasePrefix";
-write_file($htaccess,
-           "Redirect /channels/$channelName $target\n" .
-           "Redirect /releases/nixos/channels/$channelName $target\n");
-
-my $channelLink = "$channelsDir/$channelName";
-if ((read_file($channelLink, err_mode => 'quiet') // "") ne $target) {
-    write_file("$channelLink.tmp", "$target");
-    rename("$channelLink.tmp", $channelLink) or die;
-}
-
-system("cat $channelsDir/.htaccess-nix* > $channelsDir/.htaccess.tmp") == 0 or die;
-rename("$channelsDir/.htaccess.tmp", "$channelsDir/.htaccess") or die;
 
 # Update the nixos-* branch in the nixpkgs repo. Also update the
 # nixpkgs-channels repo for compatibility.
@@ -244,7 +224,5 @@ system("git remote update origin >&2") == 0 or die;
 system("git push origin $rev:refs/heads/$channelName >&2") == 0 or die;
 system("git push channels $rev:refs/heads/$channelName >&2") == 0 or die;
 
-flock($lockfile, LOCK_UN) or die "cannot release channels lock\n";
-
-# Upload to nixos.org.
-system("rsync -avx $channelsDir/ hydra-mirror\@download.nixos.org:/releases/channels/") == 0 or die;
+# Update channel on channels.nixos.org
+$bucketChannels->add_key($channelsDir, $target, { "x-amz-website-redirect-location header" => $target });
