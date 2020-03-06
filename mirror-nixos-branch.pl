@@ -226,4 +226,4 @@ system("git push channels $rev:refs/heads/$channelName >&2") == 0 or die;
 
 # Update channel on channels.nixos.org
 $bucketChannels->add_key($channelsDir, $target, { "x-amz-website-redirect-location" => $target });
-$bucketChannels->add_key("$channelsDir/nixexprs.tar.xz", $target, { "x-amz-website-redirect-location" => $target });
+$bucketChannels->add_key("$channelsDir/nixexprs.tar.xz", $target, { "x-amz-website-redirect-location" => "$target/nixexprs.tar.xz" });
