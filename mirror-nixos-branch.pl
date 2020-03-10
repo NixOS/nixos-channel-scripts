@@ -225,5 +225,21 @@ system("git push origin $rev:refs/heads/$channelName >&2") == 0 or die;
 system("git push channels $rev:refs/heads/$channelName >&2") == 0 or die;
 
 # Update channel on channels.nixos.org
-$bucketChannels->add_key($channelsDir, $target, { "x-amz-website-redirect-location" => $target });
-$bucketChannels->add_key("$channelsDir/nixexprs.tar.xz", $target, { "x-amz-website-redirect-location" => "$target/nixexprs.tar.xz" });
+$bucketChannels->add_key($channelName, $target, { "x-amz-website-redirect-location" => $target }) or die $bucketChannels->err . ": " . $bucketChannels->errstr;
+$bucketChannels->add_key("$channelName/nixexprs.tar.xz", "$target/nixexprs.tar.xz", { "x-amz-website-redirect-location" => "$target/nixexprs.tar.xz" }) or die $bucketChannels->err . ": " . $bucketChannels->errstr;
+
+# for nixos channels also create redirects for latest images
+if ($channelName =~ /nixos/) {
+  for my $artifact ("nixos-graphical",
+                    "nixos-plasma5",
+                    "nixos-gnome",
+                    "nixos-minimal",
+                   ) {
+    for my $arch ("x86_64", "i686") {
+      for my $format ("ova", "iso") {
+        $bucketChannels->add_key("$channelName/latest-$artifact-$arch-linux.$format", "", {"x-amz-website-redirect-location" => "$target/$artifact-$releaseThingy-$arch-linux.$format" }) or die $bucketChannels->err . ": " . $bucketChannels->errstr;
+        $bucketChannels->add_key("$channelName/latest-$artifact-$arch-linux.$format.sha256", "", {"x-amz-website-redirect-location" => "$target/$artifact-$releaseThingy-$arch-linux.$format.sha256" }) or die $bucketChannels->err . ": " . $bucketChannels->errstr;
+      }
+    }
+  }
+}
