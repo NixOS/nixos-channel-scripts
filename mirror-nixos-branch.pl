@@ -237,8 +237,8 @@ if ($channelName =~ /nixos/) {
                    ) {
     for my $arch ("x86_64", "i686") {
       for my $format ("ova", "iso") {
-        $bucketChannels->add_key("$channelsDir/latest-$artifact-$arch-linux.$format", "", {"x-amz-website-redirect-location" => "$target/$artifact-$releaseThingy-$arch-linux.$format" });
-        $bucketChannels->add_key("$channelsDir/latest-$artifact-$arch-linux.$format.sha256", "", {"x-amz-website-redirect-location" => "$target/$artifact-$releaseThingy-$arch-linux.$format.sha256" });
+        $bucketChannels->add_key("$channelName/latest-$artifact-$arch-linux.$format", "", {"x-amz-website-redirect-location" => "$target/$artifact-$releaseThingy-$arch-linux.$format" });
+        $bucketChannels->add_key("$channelName/latest-$artifact-$arch-linux.$format.sha256", "", {"x-amz-website-redirect-location" => "$target/$artifact-$releaseThingy-$arch-linux.$format.sha256" });
       }
     }
   }
