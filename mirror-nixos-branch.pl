@@ -234,8 +234,6 @@ if ($channelName =~ /nixos/) {
                     "nixos-plasma5",
                     "nixos-gnome",
                     "nixos-minimal",
-                    "nixos-plasma5-x86_64-linux.ova"
-                    "nixos-gnome-x86_64-linux.ova"
                    ) {
     for my $arch ("x86_64", "i686") {
       for my $format ("ova", "iso") {
