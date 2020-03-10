@@ -45,7 +45,14 @@ my $s3 = Net::Amazon::S3->new(
     });
 
 my $bucketReleases = $s3->bucket($bucketReleasesName) or die;
-my $bucketChannels = $s3->bucket($bucketChannelsName) or die;
+
+my $s3_us = Net::Amazon::S3->new(
+    { aws_access_key_id     => $aws_access_key_id,
+      aws_secret_access_key => $aws_secret_access_key,
+      retry                 => 1,
+    });
+
+my $bucketChannels = $s3_us->bucket($bucketChannelsName) or die;
 
 
 sub fetch {
@@ -64,6 +71,8 @@ my $releaseInfo = decode_json(fetch($releaseUrl, 'application/json'));
 
 my $releaseId = $releaseInfo->{id} or die;
 my $releaseName = $releaseInfo->{nixname} or die;
+$releaseName =~ /-([0-9].+)/ or die;
+my $releaseVersion = $1;
 my $evalId = $releaseInfo->{jobsetevals}->[0] or die;
 my $evalUrl = "https://hydra.nixos.org/eval/$evalId";
 my $evalInfo = decode_json(fetch($evalUrl, 'application/json'));
@@ -71,23 +80,25 @@ my $releasePrefix = "$channelDirRel/$releaseName";
 
 my $rev = $evalInfo->{jobsetevalinputs}->{nixpkgs}->{revision} or die;
 
-print STDERR "release is ‘$releaseName’ (build $releaseId), eval is $evalId, prefix is $releasePrefix, Git commit is $rev\n";
+print STDERR "release is $releaseName (build $releaseId), eval is $evalId, prefix is $releasePrefix, Git commit is $rev\n";
 
 # Guard against the channel going back in time.
-my $curRelease = $bucketChannels.get_key($channelName) or "";
-$! = 0; # Clear errno to avoid reporting non-fork/exec-related issues
-my $d = `NIX_PATH= nix-instantiate --eval -E "builtins.compareVersions (builtins.parseDrvName \\"$curRelease\\").version (builtins.parseDrvName \\"$releaseName\\").version"`;
-if ($? != 0) {
-    warn "Could not execute nix-instantiate: exit $?; errno $!\n";
-    exit 1;
+my $curRelease = $bucketChannels->get_key($channelName)->{'x-amz-website-redirect-location'} // "";
+if (!defined $ENV{'FORCE'}) {
+    print STDERR "previous release is $curRelease\n";
+    $! = 0; # Clear errno to avoid reporting non-fork/exec-related issues
+    my $d = `NIX_PATH= nix-instantiate --eval -E "builtins.compareVersions (builtins.parseDrvName \\"$curRelease\\").version (builtins.parseDrvName \\"$releaseName\\").version"`;
+    if ($? != 0) {
+        warn "Could not execute nix-instantiate: exit $?; errno $!\n";
+        exit 1;
+    }
+    chomp $d;
+    if ($d == 1) {
+        warn("channel would go back in time from $curRelease to $releaseName, bailing out\n");
+        exit;
+    }
+    exit if $d == 0;
 }
-chomp $d;
-if ($d == 1) {
-    warn("channel would go back in time from $curRelease to $releaseName, bailing out\n");
-    exit;
-}
-
-exit if $d == 0;
 
 if ($bucketReleases->head_key("$releasePrefix")) {
     print STDERR "release already exists\n";
@@ -224,22 +235,32 @@ system("git remote update origin >&2") == 0 or die;
 system("git push origin $rev:refs/heads/$channelName >&2") == 0 or die;
 system("git push channels $rev:refs/heads/$channelName >&2") == 0 or die;
 
-# Update channel on channels.nixos.org
-$bucketChannels->add_key($channelName, $target, { "x-amz-website-redirect-location" => $target }) or die $bucketChannels->err . ": " . $bucketChannels->errstr;
-$bucketChannels->add_key("$channelName/nixexprs.tar.xz", "$target/nixexprs.tar.xz", { "x-amz-website-redirect-location" => "$target/nixexprs.tar.xz" }) or die $bucketChannels->err . ": " . $bucketChannels->errstr;
+sub redirect {
+    my ($from, $to) = @_;
+    $to = "https://releases.nixos.org/" . $to;
+    print STDERR "redirect $from -> $to\n";
+    $bucketChannels->add_key($from, "", { "x-amz-website-redirect-location" => $to })
+        or die $bucketChannels->err . ": " . $bucketChannels->errstr;
+}
 
-# for nixos channels also create redirects for latest images
+# Update channels on channels.nixos.org.
+redirect($channelName, $releasePrefix);
+redirect("$channelName/nixexprs.tar.xz", "$releasePrefix/nixexprs.tar.xz");
+
+# For nixos channels also create redirects for latest images.
+# FIXME: create only redirects to files that exist.
 if ($channelName =~ /nixos/) {
-  for my $artifact ("nixos-graphical",
-                    "nixos-plasma5",
-                    "nixos-gnome",
-                    "nixos-minimal",
-                   ) {
-    for my $arch ("x86_64", "i686") {
-      for my $format ("ova", "iso") {
-        $bucketChannels->add_key("$channelName/latest-$artifact-$arch-linux.$format", "", {"x-amz-website-redirect-location" => "$target/$artifact-$releaseThingy-$arch-linux.$format" }) or die $bucketChannels->err . ": " . $bucketChannels->errstr;
-        $bucketChannels->add_key("$channelName/latest-$artifact-$arch-linux.$format.sha256", "", {"x-amz-website-redirect-location" => "$target/$artifact-$releaseThingy-$arch-linux.$format.sha256" }) or die $bucketChannels->err . ": " . $bucketChannels->errstr;
-      }
+    for my $artifact ("nixos-graphical",
+                      "nixos-plasma5",
+                      "nixos-gnome",
+                      "nixos-minimal",
+        )
+    {
+        for my $arch ("x86_64-linux", "i686-linux") {
+            for my $format ("ova", "iso") {
+                redirect("$channelName/latest-$artifact-$arch.$format", "$releasePrefix/$artifact-$releaseVersion-$arch.$format");
+                redirect("$channelName/latest-$artifact-$arch.$format.sha256", "$releasePrefix/$artifact-$releaseVersion-$arch.$format.sha256");
+            }
+        }
     }
-  }
 }
