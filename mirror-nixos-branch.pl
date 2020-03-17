@@ -246,6 +246,7 @@ sub redirect {
 # Update channels on channels.nixos.org.
 redirect($channelName, $releasePrefix);
 redirect("$channelName/nixexprs.tar.xz", "$releasePrefix/nixexprs.tar.xz");
+redirect("$channelName/git-revision", "$releasePrefix/git-revision");
 
 # For nixos channels also create redirects for latest images.
 # FIXME: create only redirects to files that exist.
