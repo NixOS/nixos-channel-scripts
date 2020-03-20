@@ -251,17 +251,18 @@ redirect("$channelName/git-revision", "$releasePrefix/git-revision");
 # For nixos channels also create redirects for latest images.
 # FIXME: create only redirects to files that exist.
 if ($channelName =~ /nixos/) {
-    for my $artifact ("nixos-graphical",
-                      "nixos-plasma5",
-                      "nixos-gnome",
-                      "nixos-minimal",
-        )
-    {
-        for my $arch ("x86_64-linux", "i686-linux") {
-            for my $format ("ova", "iso") {
-                redirect("$channelName/latest-$artifact-$arch.$format", "$releasePrefix/$artifact-$releaseVersion-$arch.$format");
-                redirect("$channelName/latest-$artifact-$arch.$format.sha256", "$releasePrefix/$artifact-$releaseVersion-$arch.$format.sha256");
-            }
+    for my $arch ("x86_64-linux", "i686-linux") {
+        for my $artifact ("nixos-graphical",
+                          "nixos-plasma5",
+                          "nixos-gnome",
+                          "nixos-minimal",
+            )
+        {
+            redirect("$channelName/latest-$artifact-$arch.iso", "$releasePrefix/$artifact-$releaseVersion-$arch.iso");
+            redirect("$channelName/latest-$artifact-$arch.iso.sha256", "$releasePrefix/$artifact-$releaseVersion-$arch.iso.sha256");
         }
+
+        redirect("$channelName/latest-nixos-$arch.ova", "$releasePrefix/nixos-$releaseVersion-$arch.ova");
+        redirect("$channelName/latest-nixos-$arch.ova.sha256", "$releasePrefix/nixos-$releaseVersion-$arch.ova.sha256");
     }
 }
