@@ -25,9 +25,10 @@ my $channelDirRel = $channelName eq "nixpkgs-unstable" ? "nixpkgs" : "$1/$2";
 
 
 # Configuration.
-my $channelsDir = "/data/releases/channels";
-my $filesCache = "/data/releases/nixos-files.sqlite";
-my $bucketName = "nix-releases";
+my $TMPDIR = $ENV{'TMPDIR'} // "/tmp";
+my $filesCache = "${TMPDIR}/nixos-files.sqlite";
+my $bucketReleasesName = "nix-releases";
+my $bucketChannelsName = "nix-channels";
 
 $ENV{'GIT_DIR'} = "/home/hydra-mirror/nixpkgs-channels";
 
@@ -43,7 +44,15 @@ my $s3 = Net::Amazon::S3->new(
       host                  => "s3-eu-west-1.amazonaws.com",
     });
 
-my $bucket = $s3->bucket($bucketName) or die;
+my $bucketReleases = $s3->bucket($bucketReleasesName) or die;
+
+my $s3_us = Net::Amazon::S3->new(
+    { aws_access_key_id     => $aws_access_key_id,
+      aws_secret_access_key => $aws_secret_access_key,
+      retry                 => 1,
+    });
+
+my $bucketChannels = $s3_us->bucket($bucketChannelsName) or die;
 
 
 sub fetch {
@@ -62,6 +71,8 @@ my $releaseInfo = decode_json(fetch($releaseUrl, 'application/json'));
 
 my $releaseId = $releaseInfo->{id} or die;
 my $releaseName = $releaseInfo->{nixname} or die;
+$releaseName =~ /-([0-9].+)/ or die;
+my $releaseVersion = $1;
 my $evalId = $releaseInfo->{jobsetevals}->[-1] or die;
 my $evalUrl = "https://hydra.nixos.org/eval/$evalId";
 my $evalInfo = decode_json(fetch($evalUrl, 'application/json'));
@@ -69,21 +80,30 @@ my $releasePrefix = "$channelDirRel/$releaseName";
 
 my $rev = $evalInfo->{jobsetevalinputs}->{nixpkgs}->{revision} or die;
 
-print STDERR "release is ‘$releaseName’ (build $releaseId), eval is $evalId, prefix is $releasePrefix, Git commit is $rev\n";
+print STDERR "release is $releaseName (build $releaseId), eval is $evalId, prefix is $releasePrefix, Git commit is $rev\n";
 
 # Guard against the channel going back in time.
-my $curReleaseDir = readlink "$channelsDir/$channelName";
-if (defined $curReleaseDir) {
-    my $curRelease = basename($curReleaseDir);
+my $curRelease = $bucketChannels->get_key($channelName)->{'x-amz-website-redirect-location'} // "";
+if (!defined $ENV{'FORCE'}) {
+    print STDERR "previous release is $curRelease\n";
+    $! = 0; # Clear errno to avoid reporting non-fork/exec-related issues
     my $d = `NIX_PATH= nix-instantiate --eval -E "builtins.compareVersions (builtins.parseDrvName \\"$curRelease\\").version (builtins.parseDrvName \\"$releaseName\\").version"`;
+    if ($? != 0) {
+        warn "Could not execute nix-instantiate: exit $?; errno $!\n";
+        exit 1;
+    }
     chomp $d;
-    die "channel would go back in time from $curRelease to $releaseName, bailing out\n" if $d == 1;
+    if ($d == 1) {
+        warn("channel would go back in time from $curRelease to $releaseName, bailing out\n");
+        exit;
+    }
+    exit if $d == 0;
 }
 
-if ($bucket->head_key("$releasePrefix")) {
+if ($bucketReleases->head_key("$releasePrefix")) {
     print STDERR "release already exists\n";
 } else {
-    my $tmpDir = "/data/releases/tmp/release-$channelName/$releaseName";
+    my $tmpDir = "$TMPDIR/release-$channelName/$releaseName";
     File::Path::make_path($tmpDir);
 
     write_file("$tmpDir/src-url", $evalUrl);
@@ -115,7 +135,7 @@ if ($bucket->head_key("$releasePrefix")) {
         }
 
         if (-e "$dstFile.sha256") {
-            my $sha256_actual = `nix hash-file --type sha256 '$dstFile'`;
+            my $sha256_actual = `nix hash-file --base16 --type sha256 '$dstFile'`;
             chomp $sha256_actual;
             if ($sha256_expected ne $sha256_actual) {
                 print STDERR "file $dstFile is corrupt $sha256_expected $sha256_actual\n";
@@ -130,8 +150,14 @@ if ($bucket->head_key("$releasePrefix")) {
 
         if ($channelName !~ /-small/) {
             downloadFile("nixos.iso_minimal.i686-linux");
-            downloadFile("nixos.iso_graphical.x86_64-linux");
-            #downloadFile("nixos.iso_graphical.i686-linux");
+
+            # Renamed iso_graphcial to iso_plasma5 in 20.03
+            if ($releaseName !~ /-19./) {
+                downloadFile("nixos.iso_plasma5.x86_64-linux");
+            } else {
+                downloadFile("nixos.iso_graphical.x86_64-linux");
+            }
+
             downloadFile("nixos.ova.x86_64-linux");
             #downloadFile("nixos.ova.i686-linux");
         }
@@ -175,12 +201,12 @@ if ($bucket->head_key("$releasePrefix")) {
         my $basename = basename $fn;
         my $key = "$releasePrefix/" . $basename;
 
-        unless (defined $bucket->head_key($key)) {
-            print STDERR "mirroring $fn to s3://$bucketName/$key...\n";
-            $bucket->add_key_filename(
+        unless (defined $bucketReleases->head_key($key)) {
+            print STDERR "mirroring $fn to s3://$bucketReleasesName/$key...\n";
+            $bucketReleases->add_key_filename(
                 $key, $fn,
                 { content_type => $fn =~ /.sha256|src-url|binary-cache-url|git-revision/ ? "text/plain" : "application/octet-stream" })
-                or die $bucket->err . ": " . $bucket->errstr;
+                or die $bucketReleases->err . ": " . $bucketReleases->errstr;
         }
 
         next if $basename =~ /.sha256$/;
@@ -196,35 +222,47 @@ if ($bucket->head_key("$releasePrefix")) {
 
     $html .= "</tbody></table></body></html>";
 
-    $bucket->add_key($releasePrefix, $html,
+    $bucketReleases->add_key($releasePrefix, $html,
                      { content_type => "text/html" })
-        or die $bucket->err . ": " . $bucket->errstr;
+        or die $bucketReleases->err . ": " . $bucketReleases->errstr;
 
     File::Path::remove_tree($tmpDir);
 }
 
-# Prevent concurrent writes to the channels directory.
-open(my $lockfile, ">>", "$channelsDir/.htaccess.lock");
-flock($lockfile, LOCK_EX) or die "cannot acquire channels lock\n";
-
-# Update the channel.
-my $htaccess = "$channelsDir/.htaccess-$channelName";
-my $target = "https://d3g5gsiof5omrk.cloudfront.net/$releasePrefix";
-write_file($htaccess,
-           "Redirect /channels/$channelName $target\n" .
-           "Redirect /releases/nixos/channels/$channelName $target\n");
-
-my $channelLink = "$channelsDir/$channelName";
-if ((read_file($channelLink, err_mode => 'quiet') // "") ne $target) {
-    write_file("$channelLink.tmp", "$target");
-    rename("$channelLink.tmp", $channelLink) or die;
-}
-
-system("cat $channelsDir/.htaccess-nix* > $channelsDir/.htaccess.tmp") == 0 or die;
-rename("$channelsDir/.htaccess.tmp", "$channelsDir/.htaccess") or die;
-
-# Update the nixpkgs-channels repo.
+# Update the nixos-* branch in the nixpkgs repo. Also update the
+# nixpkgs-channels repo for compatibility.
 system("git remote update origin >&2") == 0 or die;
+system("git push origin $rev:refs/heads/$channelName >&2") == 0 or die;
 system("git push channels $rev:refs/heads/$channelName >&2") == 0 or die;
 
-flock($lockfile, LOCK_UN) or die "cannot release channels lock\n";
+sub redirect {
+    my ($from, $to) = @_;
+    $to = "https://releases.nixos.org/" . $to;
+    print STDERR "redirect $from -> $to\n";
+    $bucketChannels->add_key($from, "", { "x-amz-website-redirect-location" => $to })
+        or die $bucketChannels->err . ": " . $bucketChannels->errstr;
+}
+
+# Update channels on channels.nixos.org.
+redirect($channelName, $releasePrefix);
+redirect("$channelName/nixexprs.tar.xz", "$releasePrefix/nixexprs.tar.xz");
+redirect("$channelName/git-revision", "$releasePrefix/git-revision");
+
+# For nixos channels also create redirects for latest images.
+# FIXME: create only redirects to files that exist.
+if ($channelName =~ /nixos/) {
+    for my $arch ("x86_64-linux", "i686-linux") {
+        for my $artifact ("nixos-graphical",
+                          "nixos-plasma5",
+                          "nixos-gnome",
+                          "nixos-minimal",
+            )
+        {
+            redirect("$channelName/latest-$artifact-$arch.iso", "$releasePrefix/$artifact-$releaseVersion-$arch.iso");
+            redirect("$channelName/latest-$artifact-$arch.iso.sha256", "$releasePrefix/$artifact-$releaseVersion-$arch.iso.sha256");
+        }
+
+        redirect("$channelName/latest-nixos-$arch.ova", "$releasePrefix/nixos-$releaseVersion-$arch.ova");
+        redirect("$channelName/latest-nixos-$arch.ova.sha256", "$releasePrefix/nixos-$releaseVersion-$arch.ova.sha256");
+    }
+}

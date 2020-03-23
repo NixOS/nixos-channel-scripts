@@ -140,7 +140,7 @@ public:
                     throw Error("NAR index for ‘%s’ has an unsupported version", storePath);
 
                 recurse("", ls.at("root"));
-            } catch (std::invalid_argument & e) {
+            } catch (json::parse_error & e) {
                 // FIXME: some filenames have non-UTF8 characters in them,
                 // which is not supported by nlohmann::json. So we have to
                 // skip the entire package.
