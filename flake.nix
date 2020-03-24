@@ -11,25 +11,16 @@
 
       overlay = final: prev: {
 
-        nixos-channel-scripts = with final; stdenv.mkDerivation {
-          name = "nixos-channel-scripts";
-
-          buildInputs = with final.perlPackages;
-            [ pkgconfig
+        nixos-channel-native-programs = with final; stdenv.mkDerivation {
+          name = "nixos-channel-native-programs";
+          buildInputs = [
               final.nix
-              sqlite
-              makeWrapper
-              perl
-              FileSlurp
-              LWP
-              LWPProtocolHttps
-              ListMoreUtils
-              DBDSQLite
-              NetAmazonS3
+              pkgconfig
               boehmgc
               nlohmann_json
               boost
-            ];
+              sqlite
+          ];
 
           buildCommand = ''
             mkdir -p $out/bin
@@ -48,9 +39,35 @@
               $(pkg-config --libs nix-main) \
               $(pkg-config --libs nix-store) \
               -lsqlite3 -lnixrust
+          '';
+        };
+
+        nixos-channel-scripts = with final; stdenv.mkDerivation {
+          name = "nixos-channel-scripts";
+
+          buildInputs = with final.perlPackages;
+            [ final.nix
+              sqlite
+              makeWrapper
+              perl
+              FileSlurp
+              LWP
+              LWPProtocolHttps
+              ListMoreUtils
+              DBDSQLite
+              NetAmazonS3
+              brotli
+              jq
+              nixos-channel-native-programs
+            ];
+
+          buildCommand = ''
+            mkdir -p $out/bin
 
             cp ${./mirror-nixos-branch.pl} $out/bin/mirror-nixos-branch
-            wrapProgram $out/bin/mirror-nixos-branch --set PERL5LIB $PERL5LIB --prefix PATH : ${wget}/bin:${git}/bin:${final.nix}/bin:${gnutar}/bin:${xz}/bin:${rsync}/bin:${openssh}/bin:$out/bin
+            wrapProgram $out/bin/mirror-nixos-branch \
+              --set PERL5LIB $PERL5LIB \
+              --prefix PATH : ${wget}/bin:${git}/bin:${final.nix}/bin:${gnutar}/bin:${xz}/bin:${rsync}/bin:${openssh}/bin:${nixos-channel-native-programs}:$out/bin
 
             patchShebangs $out/bin
           '';
