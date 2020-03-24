@@ -107,7 +107,8 @@ my $releasePrefix = "$channelDirRel/$releaseName";
 
 my $rev = $evalInfo->{jobsetevalinputs}->{nixpkgs}->{revision} or die;
 
-print STDERR "release is $releaseName (build $releaseId), eval is $evalId, prefix is $releasePrefix, Git commit is $rev\n";
+print STDERR "\nRelease information:\n";
+print STDERR " - release is: $releaseName (build $releaseId)\n - eval is: $evalId\n - prefix is: $releasePrefix\n - Git commit is: $rev\n\n";
 
 if ($bucketChannels) {
     # Guard against the channel going back in time.
