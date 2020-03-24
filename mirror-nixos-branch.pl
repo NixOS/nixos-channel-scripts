@@ -15,6 +15,27 @@ use List::MoreUtils qw(uniq);
 use Net::Amazon::S3;
 use POSIX qw(strftime);
 
+# Runs the given command, printing the (unescaped) command.
+# This command continues on failure.
+sub runAllowFailure {
+    print STDERR " \$ ", join(" ", @_), "\n";
+    system(@_);
+}
+
+# Runs the given command, printing the (unescaped) command.
+# This command dies on failure.
+sub run {
+    my $context = caller(0);
+    my $code = runAllowFailure(@_);
+    unless ($code == 0) {
+        my $exit = $code >> 8;
+        my $errno = $code - ($exit << 8);
+        die "Command failed with code ($exit) errno ($errno).\n";
+    }
+
+    return $code;
+}
+
 my $channelName = $ARGV[0];
 my $releaseUrl = $ARGV[1];
 
