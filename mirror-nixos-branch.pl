@@ -50,31 +50,37 @@ my $TMPDIR = $ENV{'TMPDIR'} // "/tmp";
 my $filesCache = "${TMPDIR}/nixos-files.sqlite";
 my $bucketReleasesName = "nix-releases";
 my $bucketChannelsName = "nix-channels";
+my $dryRun = $ENV{'DRY_RUN'} // 0;
 
 $ENV{'GIT_DIR'} = "/home/hydra-mirror/nixpkgs-channels";
 
+my $bucketReleases;
+my $bucketChannels;
 
-# S3 setup.
-my $aws_access_key_id = $ENV{'AWS_ACCESS_KEY_ID'} or die;
-my $aws_secret_access_key = $ENV{'AWS_SECRET_ACCESS_KEY'} or die;
+unless ($dryRun) {
+    # S3 setup.
+    my $aws_access_key_id = $ENV{'AWS_ACCESS_KEY_ID'} or die "No AWS_ACCESS_KEY_ID given.";
+    my $aws_secret_access_key = $ENV{'AWS_SECRET_ACCESS_KEY'} or die "No AWS_SECRET_ACCESS_KEY given.";
 
-my $s3 = Net::Amazon::S3->new(
-    { aws_access_key_id     => $aws_access_key_id,
-      aws_secret_access_key => $aws_secret_access_key,
-      retry                 => 1,
-      host                  => "s3-eu-west-1.amazonaws.com",
-    });
+    my $s3 = Net::Amazon::S3->new(
+        { aws_access_key_id     => $aws_access_key_id,
+          aws_secret_access_key => $aws_secret_access_key,
+          retry                 => 1,
+          host                  => "s3-eu-west-1.amazonaws.com",
+        });
 
-my $bucketReleases = $s3->bucket($bucketReleasesName) or die;
+    $bucketReleases = $s3->bucket($bucketReleasesName) or die;
 
-my $s3_us = Net::Amazon::S3->new(
-    { aws_access_key_id     => $aws_access_key_id,
-      aws_secret_access_key => $aws_secret_access_key,
-      retry                 => 1,
-    });
+    my $s3_us = Net::Amazon::S3->new(
+        { aws_access_key_id     => $aws_access_key_id,
+          aws_secret_access_key => $aws_secret_access_key,
+          retry                 => 1,
+        });
 
-my $bucketChannels = $s3_us->bucket($bucketChannelsName) or die;
-
+    $bucketChannels = $s3_us->bucket($bucketChannelsName) or die;
+} else {
+    print STDERR "WARNING: Running in dry-run.\n";
+}
 
 sub fetch {
     my ($url, $type) = @_;
@@ -103,25 +109,27 @@ my $rev = $evalInfo->{jobsetevalinputs}->{nixpkgs}->{revision} or die;
 
 print STDERR "release is $releaseName (build $releaseId), eval is $evalId, prefix is $releasePrefix, Git commit is $rev\n";
 
-# Guard against the channel going back in time.
-my $curRelease = $bucketChannels->get_key($channelName)->{'x-amz-website-redirect-location'} // "";
-if (!defined $ENV{'FORCE'}) {
-    print STDERR "previous release is $curRelease\n";
-    $! = 0; # Clear errno to avoid reporting non-fork/exec-related issues
-    my $d = `NIX_PATH= nix-instantiate --eval -E "builtins.compareVersions (builtins.parseDrvName \\"$curRelease\\").version (builtins.parseDrvName \\"$releaseName\\").version"`;
-    if ($? != 0) {
-        warn "Could not execute nix-instantiate: exit $?; errno $!\n";
-        exit 1;
+if ($bucketChannels) {
+    # Guard against the channel going back in time.
+    my $curRelease = $bucketChannels->get_key($channelName)->{'x-amz-website-redirect-location'} // "";
+    if (!defined $ENV{'FORCE'}) {
+        print STDERR "previous release is $curRelease\n";
+        $! = 0; # Clear errno to avoid reporting non-fork/exec-related issues
+        my $d = `NIX_PATH= nix-instantiate --eval -E "builtins.compareVersions (builtins.parseDrvName \\"$curRelease\\").version (builtins.parseDrvName \\"$releaseName\\").version"`;
+        if ($? != 0) {
+            warn "Could not execute nix-instantiate: exit $?; errno $!\n";
+            exit 1;
+        }
+        chomp $d;
+        if ($d == 1) {
+            warn("channel would go back in time from $curRelease to $releaseName, bailing out\n");
+            exit;
+        }
+        exit if $d == 0;
     }
-    chomp $d;
-    if ($d == 1) {
-        warn("channel would go back in time from $curRelease to $releaseName, bailing out\n");
-        exit;
-    }
-    exit if $d == 0;
 }
 
-if ($bucketReleases->head_key("$releasePrefix")) {
+if ($bucketReleases && $bucketReleases->head_key("$releasePrefix")) {
     print STDERR "release already exists\n";
 } else {
     my $tmpDir = "$TMPDIR/release-$channelName/$releaseName";
@@ -217,37 +225,44 @@ if ($bucketReleases->head_key("$releasePrefix")) {
     $html .= "via <a href='$evalUrl'>Hydra evaluation $evalId</a>.</p>";
     $html .= "<table><thead><tr><th>File name</th><th>Size</th><th>SHA-256 hash</th></tr></thead><tbody>";
 
-    # Upload the release to S3.
-    for my $fn (sort glob("$tmpDir/*")) {
-        my $basename = basename $fn;
-        my $key = "$releasePrefix/" . $basename;
+    if ($bucketReleases) {
+        # Upload the release to S3.
+        for my $fn (sort glob("$tmpDir/*")) {
+            my $basename = basename $fn;
+            my $key = "$releasePrefix/" . $basename;
 
-        unless (defined $bucketReleases->head_key($key)) {
-            print STDERR "mirroring $fn to s3://$bucketReleasesName/$key...\n";
-            $bucketReleases->add_key_filename(
-                $key, $fn,
-                { content_type => $fn =~ /.sha256|src-url|binary-cache-url|git-revision/ ? "text/plain" : "application/octet-stream" })
-                or die $bucketReleases->err . ": " . $bucketReleases->errstr;
+            unless (defined $bucketReleases->head_key($key)) {
+                print STDERR "mirroring $fn to s3://$bucketReleasesName/$key...\n";
+                $bucketReleases->add_key_filename(
+                    $key, $fn,
+                    { content_type => $fn =~ /.sha256|src-url|binary-cache-url|git-revision/ ? "text/plain" : "application/octet-stream" })
+                    or die $bucketReleases->err . ": " . $bucketReleases->errstr;
+            }
+
+            next if $basename =~ /.sha256$/;
+
+            my $size = stat($fn)->size;
+            my $sha256 = Digest::SHA::sha256_hex(read_file($fn));
+            $html .= "<tr>";
+            $html .= "<td><a href='/$key'>$basename</a></td>";
+            $html .= "<td align='right'>$size</td>";
+            $html .= "<td><tt>$sha256</tt></td>";
+            $html .= "</tr>";
         }
 
-        next if $basename =~ /.sha256$/;
+        $html .= "</tbody></table></body></html>";
 
-        my $size = stat($fn)->size;
-        my $sha256 = Digest::SHA::sha256_hex(read_file($fn));
-        $html .= "<tr>";
-        $html .= "<td><a href='/$key'>$basename</a></td>";
-        $html .= "<td align='right'>$size</td>";
-        $html .= "<td><tt>$sha256</tt></td>";
-        $html .= "</tr>";
+        $bucketReleases->add_key($releasePrefix, $html,
+                         { content_type => "text/html" })
+            or die $bucketReleases->err . ": " . $bucketReleases->errstr;
     }
 
-    $html .= "</tbody></table></body></html>";
-
-    $bucketReleases->add_key($releasePrefix, $html,
-                     { content_type => "text/html" })
-        or die $bucketReleases->err . ": " . $bucketReleases->errstr;
-
     File::Path::remove_tree($tmpDir);
+}
+
+if ($dryRun) {
+    print STDERR "WARNING: dry-run finished...\n";
+    exit(0);
 }
 
 # Update the nixos-* branch in the nixpkgs repo. Also update the
