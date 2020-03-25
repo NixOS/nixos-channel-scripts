@@ -146,15 +146,45 @@ if ($bucketReleases && $bucketReleases->head_key("$releasePrefix")) {
     }
 
     sub downloadFile {
-        my ($jobName, $dstName) = @_;
+        my ($jobName, $dstName, $productType) = @_;
 
         my $buildInfo = decode_json(fetch("$evalUrl/job/$jobName", 'application/json'));
 
-        my $srcFile = $buildInfo->{buildproducts}->{1}->{path} or die "job '$jobName' lacks a store path";
+        my $products = ();
+        # Key the products by subtype.
+        foreach my $key (keys $buildInfo->{buildproducts}->%*) {
+            my $subType = $buildInfo->{buildproducts}->{$key}->{subtype};
+            if ($products->{$subType}) {
+                die "Job $jobName has multiple products of the same subtype $subType.\nThis is a bad assumption from this script";
+            }
+            $products->{$subType} = $buildInfo->{buildproducts}->{$key};
+        }
+        my $size = keys %{$products};
+
+        if ($size > 1 && !$productType) {
+            my $types = join(", ", keys %{$products});
+            die "Job $jobName has $size build products. Select the right product by subtype [$types]";
+        }
+
+        my $product;
+        if (!$productType) {
+            # Take the only element
+            my ($key) = keys %{$products};
+            $product = $products->{$key};
+        } else {
+            # Take the selected element
+            $product = $products->{$productType};
+        }
+
+        unless ($product) {
+            die "No product could be selected for $jobName, with type $productType";
+        }
+
+        my $srcFile = $product->{path} or die "job '$jobName' lacks a store path";
         $dstName //= basename($srcFile);
         my $dstFile = "$tmpDir/" . $dstName;
 
-        my $sha256_expected = $buildInfo->{buildproducts}->{1}->{sha256hash} or die;
+        my $sha256_expected = $product->{sha256hash} or die;
 
         if (! -e $dstFile) {
             print STDERR "downloading $srcFile to $dstFile...\n";
