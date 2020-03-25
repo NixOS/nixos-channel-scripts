@@ -267,10 +267,23 @@ if ($bucketReleases && $bucketReleases->head_key("$releasePrefix")) {
 
             unless (defined $bucketReleases->head_key($key)) {
                 print STDERR "mirroring $fn to s3://$bucketReleasesName/$key...\n";
+
+                # Default headers
+                my $configuration = ();
+                $configuration->{content_type} = "application/octet-stream";
+
+                if ($fn =~ /.sha256|src-url|binary-cache-url|git-revision/) {
+                    # Text files
+                    $configuration->{content_type} = "text/plain";
+                } elsif ($fn =~ /.json.br$/) {
+                    # JSON encoded as brotly
+                    $configuration->{content_type} = "application/json";
+                    $configuration->{content_encoding} = "br";
+                }
+
                 $bucketReleases->add_key_filename(
-                    $key, $fn,
-                    { content_type => $fn =~ /.sha256|src-url|binary-cache-url|git-revision/ ? "text/plain" : "application/octet-stream" })
-                    or die $bucketReleases->err . ": " . $bucketReleases->errstr;
+                    $key, $fn, $configuration
+                ) or die $bucketReleases->err . ": " . $bucketReleases->errstr;
             }
 
             next if $basename =~ /.sha256$/;
