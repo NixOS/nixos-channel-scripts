@@ -207,6 +207,8 @@ if ($bucketReleases && $bucketReleases->head_key("$releasePrefix")) {
     if ($channelName =~ /nixos/) {
         downloadFile("nixos.channel", "nixexprs.tar.xz");
         downloadFile("nixos.iso_minimal.x86_64-linux");
+        downloadFile("nixpkgs.tarball", "packages.json.br", "json-br");
+        downloadFile("nixos.options", "options.json.br", "json-br");
 
         if ($channelName !~ /-small/) {
             downloadFile("nixos.iso_minimal.i686-linux");
@@ -223,7 +225,8 @@ if ($bucketReleases && $bucketReleases->head_key("$releasePrefix")) {
         }
 
     } else {
-        downloadFile("tarball", "nixexprs.tar.xz");
+        downloadFile("tarball", "nixexprs.tar.xz", "source-dist");
+        downloadFile("tarball", "packages.json.br", "json-br");
     }
 
     # Generate the programs.sqlite database and put it in
