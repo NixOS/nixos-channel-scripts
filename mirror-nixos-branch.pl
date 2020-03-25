@@ -317,10 +317,15 @@ sub redirect {
 redirect($channelName, $releasePrefix);
 redirect("$channelName/nixexprs.tar.xz", "$releasePrefix/nixexprs.tar.xz");
 redirect("$channelName/git-revision", "$releasePrefix/git-revision");
+redirect("$channelName/packages.json.br", "$releasePrefix/packages.json.br");
 
-# For nixos channels also create redirects for latest images.
+# Create redirects relevant only to NixOS channels.
 # FIXME: create only redirects to files that exist.
 if ($channelName =~ /nixos/) {
+    # Options listing
+    redirect("$channelName/options.json.br", "$releasePrefix/options.json.br");
+
+    # Redirects for latest images.
     for my $arch ("x86_64-linux", "i686-linux") {
         for my $artifact ("nixos-graphical",
                           "nixos-plasma5",
