@@ -236,12 +236,12 @@ if ($bucketReleases && $bucketReleases->head_key("$releasePrefix")) {
         File::Path::make_path("$tmpDir/unpack");
         run("tar", "xfJ", "$tmpDir/nixexprs.tar.xz", "-C", "$tmpDir/unpack");
         my $exprDir = glob("$tmpDir/unpack/*");
-        run("generate-programs-index $filesCache $exprDir/programs.sqlite http://nix-cache.s3.amazonaws.com/ $tmpDir/store-paths $exprDir/nixpkgs");
-        run("index-debuginfo $filesCache s3://nix-cache $tmpDir/store-paths");
-        run("rm -f $tmpDir/nixexprs.tar.xz $exprDir/programs.sqlite-journal");
+        run("generate-programs-index", "$filesCache", "$exprDir/programs.sqlite", "http://nix-cache.s3.amazonaws.com/", "$tmpDir/store-paths", "$exprDir/nixpkgs");
+        run("index-debuginfo", "$filesCache", "s3://nix-cache", "$tmpDir/store-paths");
+        run("rm", "-f", "$tmpDir/nixexprs.tar.xz", "$exprDir/programs.sqlite-journal");
         unlink("$tmpDir/nixexprs.tar.xz.sha256");
         run("tar", "cfJ", "$tmpDir/nixexprs.tar.xz", "-C", "$tmpDir/unpack", basename($exprDir));
-        run("rm -rf $tmpDir/unpack");
+        run("rm", "-rf", "$tmpDir/unpack");
     }
 
     if (-e "$tmpDir/store-paths") {
