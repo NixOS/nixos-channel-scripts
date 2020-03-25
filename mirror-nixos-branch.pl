@@ -159,7 +159,7 @@ if ($bucketReleases && $bucketReleases->head_key("$releasePrefix")) {
         if (! -e $dstFile) {
             print STDERR "downloading $srcFile to $dstFile...\n";
             write_file("$dstFile.sha256", "$sha256_expected  $dstName");
-            system("NIX_REMOTE=https://cache.nixos.org/ nix --experimental-features nix-command cat-store '$srcFile' > '$dstFile.tmp'") == 0
+            runAllowFailure("NIX_REMOTE=https://cache.nixos.org/ nix --experimental-features nix-command cat-store '$srcFile' > '$dstFile.tmp'") == 0
                 or die "unable to fetch $srcFile\n";
             rename("$dstFile.tmp", $dstFile) or die;
         }
@@ -201,18 +201,18 @@ if ($bucketReleases && $bucketReleases->head_key("$releasePrefix")) {
     # https://cache.nixos.org/debuginfo.
     if ($channelName =~ /nixos/ && -e "$tmpDir/store-paths") {
         File::Path::make_path("$tmpDir/unpack");
-        system("tar", "xfJ", "$tmpDir/nixexprs.tar.xz", "-C", "$tmpDir/unpack") == 0 or die;
+        run("tar", "xfJ", "$tmpDir/nixexprs.tar.xz", "-C", "$tmpDir/unpack");
         my $exprDir = glob("$tmpDir/unpack/*");
-        system("generate-programs-index $filesCache $exprDir/programs.sqlite http://nix-cache.s3.amazonaws.com/ $tmpDir/store-paths $exprDir/nixpkgs") == 0 or die;
-        system("index-debuginfo $filesCache s3://nix-cache $tmpDir/store-paths") == 0 or die;
-        system("rm -f $tmpDir/nixexprs.tar.xz $exprDir/programs.sqlite-journal") == 0 or die;
+        run("generate-programs-index $filesCache $exprDir/programs.sqlite http://nix-cache.s3.amazonaws.com/ $tmpDir/store-paths $exprDir/nixpkgs");
+        run("index-debuginfo $filesCache s3://nix-cache $tmpDir/store-paths");
+        run("rm -f $tmpDir/nixexprs.tar.xz $exprDir/programs.sqlite-journal");
         unlink("$tmpDir/nixexprs.tar.xz.sha256");
-        system("tar", "cfJ", "$tmpDir/nixexprs.tar.xz", "-C", "$tmpDir/unpack", basename($exprDir)) == 0 or die;
-        system("rm -rf $tmpDir/unpack") == 0 or die;
+        run("tar", "cfJ", "$tmpDir/nixexprs.tar.xz", "-C", "$tmpDir/unpack", basename($exprDir));
+        run("rm -rf $tmpDir/unpack");
     }
 
     if (-e "$tmpDir/store-paths") {
-        system("xz", "$tmpDir/store-paths") == 0 or die;
+        run("xz", "$tmpDir/store-paths");
     }
 
     my $now = strftime("%F %T", localtime);
@@ -268,9 +268,9 @@ if ($dryRun) {
 
 # Update the nixos-* branch in the nixpkgs repo. Also update the
 # nixpkgs-channels repo for compatibility.
-system("git remote update origin >&2") == 0 or die;
-system("git push origin $rev:refs/heads/$channelName >&2") == 0 or die;
-system("git push channels $rev:refs/heads/$channelName >&2") == 0 or die;
+run("git remote update origin >&2");
+run("git push origin $rev:refs/heads/$channelName >&2");
+run("git push channels $rev:refs/heads/$channelName >&2");
 
 sub redirect {
     my ($from, $to) = @_;
