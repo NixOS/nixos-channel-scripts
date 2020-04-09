@@ -331,6 +331,7 @@ redirect($channelName, $releasePrefix);
 redirect("$channelName/nixexprs.tar.xz", "$releasePrefix/nixexprs.tar.xz");
 redirect("$channelName/git-revision", "$releasePrefix/git-revision");
 redirect("$channelName/packages.json.br", "$releasePrefix/packages.json.br");
+redirect("$channelName/store-paths.xz", "$releasePrefix/store-paths.xz");
 
 # Create redirects relevant only to NixOS channels.
 # FIXME: create only redirects to files that exist.
