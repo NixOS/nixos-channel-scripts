@@ -3,7 +3,7 @@
 
   description = "Script for generating Nixpkgs/NixOS channels";
 
-  inputs.nixpkgs.url = "nixpkgs/release-19.09";
+  inputs.nixpkgs.url = "nixpkgs/nixos-20.03";
 
   outputs = { self, nixpkgs, nix }:
 
