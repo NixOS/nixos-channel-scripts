@@ -10,7 +10,6 @@
 #include "get-drvs.hh"
 #include "thread-pool.hh"
 #include "sqlite.hh"
-#include "download.hh"
 #include "binary-cache-store.hh"
 
 #include "file-cache.hh"
