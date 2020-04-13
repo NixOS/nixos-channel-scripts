@@ -112,7 +112,12 @@ print STDERR " - release is: $releaseName (build $releaseId)\n - eval is: $evalI
 
 if ($bucketChannels) {
     # Guard against the channel going back in time.
-    my $curRelease = $bucketChannels->get_key($channelName)->{'x-amz-website-redirect-location'} // "";
+    my $curRelease = "";
+
+    if (defined(my $object = $bucketChannels->get_key($channelName))) {
+        $curRelease = $object->{'x-amz-website-redirect-location'} // "";
+    }
+
     if (!defined $ENV{'FORCE'}) {
         print STDERR "previous release is $curRelease\n";
         $! = 0; # Clear errno to avoid reporting non-fork/exec-related issues
