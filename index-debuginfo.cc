@@ -29,7 +29,7 @@ void mainWrapped(int argc, char * * argv)
     if (hasSuffix(binaryCacheUri, "/")) binaryCacheUri.pop_back();
     auto binaryCache = openStore(binaryCacheUri).cast<S3BinaryCacheStore>();
 
-    auto storePaths = binaryCache->parseStorePathSet(tokenizeString<PathSet>(readFile(storePathsFile, true)));
+    auto storePaths = binaryCache->parseStorePathSet(tokenizeString<PathSet>(readFile(storePathsFile)));
 
     std::regex debugFileRegex("^lib/debug/\\.build-id/[0-9a-f]{2}/[0-9a-f]{38}\\.debug$");
 

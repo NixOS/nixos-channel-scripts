@@ -48,7 +48,7 @@ void mainWrapped(int argc, char * * argv)
     auto binaryCache = openStore(binaryCacheUri).cast<BinaryCacheStore>();
 
     /* Get the allowed store paths to be included in the database. */
-    auto allowedPaths = binaryCache->parseStorePathSet(tokenizeString<PathSet>(readFile(storePathsFile, true)));
+    auto allowedPaths = binaryCache->parseStorePathSet(tokenizeString<PathSet>(readFile(storePathsFile)));
 
     StorePathSet allowedPathsClosure;
     binaryCache->computeFSClosure(allowedPaths, allowedPathsClosure);
