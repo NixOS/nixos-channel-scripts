@@ -32,13 +32,13 @@
               $(pkg-config --libs nix-main) \
               $(pkg-config --libs nix-expr) \
               $(pkg-config --libs nix-store) \
-              -lsqlite3 -lgc -lnixrust
+              -lsqlite3 -lgc
 
             g++ -Os -g ${./index-debuginfo.cc} -Wall -std=c++14 -o $out/bin/index-debuginfo -I . \
               $(pkg-config --cflags nix-main) \
               $(pkg-config --libs nix-main) \
               $(pkg-config --libs nix-store) \
-              -lsqlite3 -lnixrust
+              -lsqlite3
           '';
         };
 

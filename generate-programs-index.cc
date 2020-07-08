@@ -11,6 +11,7 @@
 #include "thread-pool.hh"
 #include "sqlite.hh"
 #include "binary-cache-store.hh"
+#include "logging.hh"
 
 #include "file-cache.hh"
 
@@ -40,7 +41,7 @@ void mainWrapped(int argc, char * * argv)
     Path nixpkgsPath = argv[5];
 
     settings.readOnlyMode = true;
-    settings.showTrace = true;
+    loggerSettings.showTrace = true;
 
     auto localStore = openStore();
     std::string binaryCacheUri = argv[3];
@@ -121,7 +122,7 @@ void mainWrapped(int argc, char * * argv)
             }
         } catch (AssertionError & e) {
         } catch (Error & e) {
-            e.addPrefix(fmt("in package ‘%s’: ", package.attrPath));
+            e.addTrace({}, hintfmt("in package '%s': ", package.attrPath));
             throw;
         }
 

@@ -129,7 +129,7 @@ public:
            contains a JSON serialisation of the listing of the NAR
            contents) from the binary cache. */
         auto now1 = std::chrono::steady_clock::now();
-        auto s = binaryCache->getFile(storePathToHash(storePath) + ".ls");
+        auto s = binaryCache->getFile(std::string(baseNameOf(storePath).substr(0, StorePath::HashLen)) + ".ls");
         if (!s)
             printInfo("warning: no listing of %s in binary cache", storePath);
         else {
