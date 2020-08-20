@@ -277,7 +277,7 @@ if ($bucketReleases && $bucketReleases->head_key("$releasePrefix")) {
                 my $configuration = ();
                 $configuration->{content_type} = "application/octet-stream";
 
-                if ($fn =~ /.sha256|src-url|binary-cache-url|git-revision/) {
+                if ($fn =~ /.sha256|.asc|src-url|binary-cache-url|git-revision|install/) {
                     # Text files
                     $configuration->{content_type} = "text/plain";
                 } elsif ($fn =~ /.json.br$/) {
