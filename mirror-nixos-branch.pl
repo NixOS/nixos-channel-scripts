@@ -317,11 +317,14 @@ if ($dryRun) {
     exit(0);
 }
 
-# Update the nixos-* branch in the nixpkgs repo. Also update the
-# nixpkgs-channels repo for compatibility.
+# Update the nixos-* branch in the nixpkgs repo.
 run("git remote update origin >&2");
 run("git push origin $rev:refs/heads/$channelName >&2");
-run("git push channels $rev:refs/heads/$channelName >&2");
+
+# Also update the nixpkgs-channels repo for compatibility.
+if ($channelName =~ /20.03/ || $channelName =~ /19.09/) {
+    run("git push channels $rev:refs/heads/$channelName >&2");
+}
 
 sub redirect {
     my ($from, $to) = @_;
