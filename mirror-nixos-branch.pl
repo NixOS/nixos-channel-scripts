@@ -225,6 +225,10 @@ if ($bucketReleases && $bucketReleases->head_key("$releasePrefix")) {
                 downloadFile("nixos.iso_graphical.x86_64-linux");
             }
 
+            if ($releaseName !~ /-19./ && $releaseName !~ /-20.03/) {
+                downloadFile("nixos.iso_gnome.x86_64-linux");
+            }
+
             downloadFile("nixos.ova.x86_64-linux");
             #downloadFile("nixos.ova.i686-linux");
         }
