@@ -1,6 +1,4 @@
 {
-  edition = 201909;
-
   description = "Script for generating Nixpkgs/NixOS channels";
 
   inputs.nixpkgs.url = "nixpkgs/nixos-20.03";
