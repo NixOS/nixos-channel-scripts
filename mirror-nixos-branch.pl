@@ -259,7 +259,7 @@ if ($bucketReleases && $bucketReleases->head_key("$releasePrefix")) {
 
     my $now = strftime("%F %T", localtime);
     my $title = "$channelName release $releaseName";
-    my $githubLink = "https://github.com/NixOS/nixpkgs-channels/commits/$rev";
+    my $githubLink = "https://github.com/NixOS/nixpkgs/commits/$rev";
 
     my $html = "<html><head>";
     $html .= "<title>$title</title></head>";
