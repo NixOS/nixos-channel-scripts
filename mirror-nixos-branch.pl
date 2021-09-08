@@ -325,16 +325,17 @@ if ($dryRun) {
 run("git remote update origin >&2");
 run("git push origin $rev:refs/heads/$channelName >&2");
 
-# Also update the nixpkgs-channels repo for compatibility.
-if ($channelName =~ /20.03/ || $channelName =~ /19.09/) {
-    run("git push channels $rev:refs/heads/$channelName >&2");
-}
+# s-maxage=600: Serve from cache for 5 minutes.
+# stale-while-revaliadate=1800: Serve from cache while updating in the background for 30 minutes.
+# https://web.dev/stale-while-revalidate/
+# https://developer.fastly.com/learning/concepts/cache-freshness/
+my $cache_control = "s-maxage=600,stale-while-revalidate=1800,public";
 
 sub redirect {
     my ($from, $to) = @_;
     $to = "https://releases.nixos.org/" . $to;
     print STDERR "redirect $from -> $to\n";
-    $bucketChannels->add_key($from, "", { "x-amz-website-redirect-location" => $to })
+    $bucketChannels->add_key($from, "", { "x-amz-website-redirect-location" => $to, "cache-control" => $cache_control })
         or die $bucketChannels->err . ": " . $bucketChannels->errstr;
 }
 
