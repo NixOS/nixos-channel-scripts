@@ -325,11 +325,6 @@ if ($dryRun) {
 run("git remote update origin >&2");
 run("git push origin $rev:refs/heads/$channelName >&2");
 
-# Also update the nixpkgs-channels repo for compatibility.
-if ($channelName =~ /20.03/ || $channelName =~ /19.09/) {
-    run("git push channels $rev:refs/heads/$channelName >&2");
-}
-
 # s-maxage=600: Serve from cache for 5 minutes.
 # stale-while-revaliadate=1800: Serve from cache while updating in the background for 30 minutes.
 # https://web.dev/stale-while-revalidate/
