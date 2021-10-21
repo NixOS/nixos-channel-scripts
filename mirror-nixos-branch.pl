@@ -325,11 +325,11 @@ if ($dryRun) {
 run("git remote update origin >&2");
 run("git push origin $rev:refs/heads/$channelName >&2");
 
-# s-maxage=600: Serve from cache for 5 minutes.
+# maxage=600: Serve from cache for 5 minutes.
 # stale-while-revaliadate=1800: Serve from cache while updating in the background for 30 minutes.
 # https://web.dev/stale-while-revalidate/
 # https://developer.fastly.com/learning/concepts/cache-freshness/
-my $cache_control = "s-maxage=600,stale-while-revalidate=1800,public";
+my $cache_control = "maxage=600,stale-while-revalidate=1800,public";
 
 sub redirect {
     my ($from, $to) = @_;
