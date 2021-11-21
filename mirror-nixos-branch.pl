@@ -83,18 +83,19 @@ unless ($dryRun) {
 }
 
 sub fetch {
-    my ($url, $type) = @_;
+    my ($url, $type, $ignoreErrors) = @_;
 
     my $ua = LWP::UserAgent->new;
     $ua->default_header('Accept', $type) if defined $type;
 
     my $response = $ua->get($url);
+    return "" if $ignoreErrors and not $response->is_success;
     die "could not download $url: ", $response->status_line, "\n" unless $response->is_success;
 
     return $response->decoded_content;
 }
 
-my $releaseInfo = decode_json(fetch($releaseUrl, 'application/json'));
+my $releaseInfo = decode_json(fetch($releaseUrl, 'application/json', 0));
 
 my $releaseId = $releaseInfo->{id} or die;
 my $releaseName = $releaseInfo->{nixname} or die;
@@ -102,7 +103,7 @@ $releaseName =~ /-([0-9].+)/ or die;
 my $releaseVersion = $1;
 my $evalId = $releaseInfo->{jobsetevals}->[0] or die;
 my $evalUrl = "https://hydra.nixos.org/eval/$evalId";
-my $evalInfo = decode_json(fetch($evalUrl, 'application/json'));
+my $evalInfo = decode_json(fetch($evalUrl, 'application/json', 0));
 my $releasePrefix = "$channelDirRel/$releaseName";
 
 my $rev = $evalInfo->{jobsetevalinputs}->{nixpkgs}->{revision} or die;
@@ -146,14 +147,16 @@ if ($bucketReleases && $bucketReleases->head_key("$releasePrefix")) {
     write_file("$tmpDir/binary-cache-url", "https://cache.nixos.org");
 
     if (! -e "$tmpDir/store-paths.xz") {
-        my $storePaths = decode_json(fetch("$evalUrl/store-paths", 'application/json'));
+        my $storePaths = decode_json(fetch("$evalUrl/store-paths", 'application/json', 0));
         write_file("$tmpDir/store-paths", join("\n", uniq(@{$storePaths})) . "\n");
     }
 
     sub downloadFile {
-        my ($jobName, $dstName, $productType) = @_;
+        my ($jobName, $dstName, $productType, $ignoreErrors) = @_;
 
-        my $buildInfo = decode_json(fetch("$evalUrl/job/$jobName", 'application/json'));
+        my $rawJson = fetch("$evalUrl/job/$jobName", 'application/json', $ignoreErrors);
+        return if $ignoreErrors and $rawJson == "";
+        my $buildInfo = decode_json($rawJson);
 
         my $products = ();
         # Key the products by subtype.
@@ -210,10 +213,10 @@ if ($bucketReleases && $bucketReleases->head_key("$releasePrefix")) {
     }
 
     if ($channelName =~ /nixos/) {
-        downloadFile("nixos.channel", "nixexprs.tar.xz");
-        downloadFile("nixos.iso_minimal.x86_64-linux");
-        downloadFile("nixpkgs.tarball", "packages.json.br", "json-br");
-        downloadFile("nixos.options", "options.json.br", "json-br");
+        downloadFile("nixos.channel", "nixexprs.tar.xz", 0);
+        downloadFile("nixos.iso_minimal.x86_64-linux", 1);
+        downloadFile("nixpkgs.tarball", "packages.json.br", "json-br", 0);
+        downloadFile("nixos.options", "options.json.br", "json-br", 0);
 
         if ($channelName !~ /-small/) {
             downloadFile("nixos.iso_minimal.i686-linux");
