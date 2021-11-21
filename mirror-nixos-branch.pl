@@ -215,30 +215,30 @@ if ($bucketReleases && $bucketReleases->head_key("$releasePrefix")) {
     if ($channelName =~ /nixos/) {
         downloadFile("nixos.channel", "nixexprs.tar.xz", 0);
         downloadFile("nixos.iso_minimal.x86_64-linux", 1);
-        downloadFile("nixpkgs.tarball", "packages.json.br", "json-br", 0);
-        downloadFile("nixos.options", "options.json.br", "json-br", 0);
+        downloadFile("nixpkgs.tarball", "packages.json.br", "json-br", 1);
+        downloadFile("nixos.options", "options.json.br", "json-br", 1);
 
         if ($channelName !~ /-small/) {
-            downloadFile("nixos.iso_minimal.i686-linux");
+            downloadFile("nixos.iso_minimal.i686-linux", 1);
 
             # Renamed iso_graphcial to iso_plasma5 in 20.03
             if ($releaseName !~ /-19./) {
-                downloadFile("nixos.iso_plasma5.x86_64-linux");
+                downloadFile("nixos.iso_plasma5.x86_64-linux", 1);
             } else {
-                downloadFile("nixos.iso_graphical.x86_64-linux");
+                downloadFile("nixos.iso_graphical.x86_64-linux", 1);
             }
 
             if ($releaseName !~ /-19./ && $releaseName !~ /-20.03/) {
-                downloadFile("nixos.iso_gnome.x86_64-linux");
+                downloadFile("nixos.iso_gnome.x86_64-linux", 1);
             }
 
-            downloadFile("nixos.ova.x86_64-linux");
+            downloadFile("nixos.ova.x86_64-linux", 1);
             #downloadFile("nixos.ova.i686-linux");
         }
 
     } else {
-        downloadFile("tarball", "nixexprs.tar.xz", "source-dist");
-        downloadFile("tarball", "packages.json.br", "json-br");
+        downloadFile("tarball", "nixexprs.tar.xz", "source-dist", 0);
+        downloadFile("tarball", "packages.json.br", "json-br", 0);
     }
 
     # Generate the programs.sqlite database and put it in
