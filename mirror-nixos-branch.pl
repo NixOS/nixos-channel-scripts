@@ -210,27 +210,31 @@ if ($bucketReleases && $bucketReleases->head_key("$releasePrefix")) {
     }
 
     if ($channelName =~ /nixos/) {
+        my $arch = "x86_64-linux";
+        if ($channelName =~ /-aarch64\z/) {
+            $arch = "aarch64-linux";
+        }
+
         downloadFile("nixos.channel", "nixexprs.tar.xz");
-        downloadFile("nixos.iso_minimal.x86_64-linux");
+        downloadFile("nixos.iso_minimal.$arch");
         downloadFile("nixpkgs.tarball", "packages.json.br", "json-br");
         downloadFile("nixos.options", "options.json.br", "json-br");
 
         if ($channelName !~ /-small/) {
-            downloadFile("nixos.iso_minimal.i686-linux");
+            downloadFile("nixos.iso_minimal.i686-linux") if $arch eq "x86_64-linux";
 
             # Renamed iso_graphcial to iso_plasma5 in 20.03
             if ($releaseName !~ /-19./) {
-                downloadFile("nixos.iso_plasma5.x86_64-linux");
+                downloadFile("nixos.iso_plasma5.$arch");
             } else {
-                downloadFile("nixos.iso_graphical.x86_64-linux");
+                downloadFile("nixos.iso_graphical.$arch");
             }
 
             if ($releaseName !~ /-19./ && $releaseName !~ /-20.03/) {
-                downloadFile("nixos.iso_gnome.x86_64-linux");
+                downloadFile("nixos.iso_gnome.$arch");
             }
 
-            downloadFile("nixos.ova.x86_64-linux");
-            #downloadFile("nixos.ova.i686-linux");
+            downloadFile("nixos.ova.$arch");
         }
 
     } else {
