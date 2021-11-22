@@ -211,18 +211,21 @@ if ($bucketReleases && $bucketReleases->head_key("$releasePrefix")) {
 
     if ($channelName =~ /nixos/) {
         my $arch = "x86_64-linux";
-        if ($channelName =~ /-aarch64\z/) {
+        if ($channelName =~ /-aarch64/) {
             $arch = "aarch64-linux";
         }
 
         downloadFile("nixos.channel", "nixexprs.tar.xz");
         downloadFile("nixos.iso_minimal.$arch");
         downloadFile("nixpkgs.tarball", "packages.json.br", "json-br");
-        downloadFile("nixos.options", "options.json.br", "json-br");
 
-        if ($channelName !~ /-small/) {
-            downloadFile("nixos.iso_minimal.i686-linux") if $arch eq "x86_64-linux";
+        # Only built on the main channel (x86_64-linux)
+        if ($arch eq "x86_64-linux") {
+            downloadFile("nixos.options", "options.json.br", "json-br");
+        }
 
+        # All of these paths are x86-specific only and are not in small channels
+        if ($arch eq "x86_64-linux" and $channelName !~ /-small/) {
             # Renamed iso_graphcial to iso_plasma5 in 20.03
             if ($releaseName !~ /-19./) {
                 downloadFile("nixos.iso_plasma5.$arch");
@@ -234,6 +237,7 @@ if ($bucketReleases && $bucketReleases->head_key("$releasePrefix")) {
                 downloadFile("nixos.iso_gnome.$arch");
             }
 
+            downloadFile("nixos.iso_minimal.i686-linux");
             downloadFile("nixos.ova.$arch");
         }
 
