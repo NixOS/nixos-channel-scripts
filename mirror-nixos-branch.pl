@@ -226,16 +226,8 @@ if ($bucketReleases && $bucketReleases->head_key("$releasePrefix")) {
 
         # All of these paths are x86-specific only and are not in small channels
         if ($arch eq "x86_64-linux" and $channelName !~ /-small/) {
-            # Renamed iso_graphcial to iso_plasma5 in 20.03
-            if ($releaseName !~ /-19./) {
-                downloadFile("nixos.iso_plasma5.$arch");
-            } else {
-                downloadFile("nixos.iso_graphical.$arch");
-            }
-
-            if ($releaseName !~ /-19./ && $releaseName !~ /-20.03/) {
-                downloadFile("nixos.iso_gnome.$arch");
-            }
+            downloadFile("nixos.iso_plasma5.$arch");
+            downloadFile("nixos.iso_gnome.$arch");
 
             downloadFile("nixos.iso_minimal.i686-linux");
             downloadFile("nixos.ova.$arch");
@@ -293,7 +285,7 @@ if ($bucketReleases && $bucketReleases->head_key("$releasePrefix")) {
                     # Text files
                     $configuration->{content_type} = "text/plain";
                 } elsif ($fn =~ /.json.br$/) {
-                    # JSON encoded as brotly
+                    # JSON encoded as brotli
                     $configuration->{content_type} = "application/json";
                     $configuration->{content_encoding} = "br";
                 }
