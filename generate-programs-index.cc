@@ -90,7 +90,7 @@ void mainWrapped(int argc, char * * argv)
     /* Get all derivations. */
     DrvInfos packages;
 
-    for (auto system : std::set<std::string>{"x86_64-linux", "i686-linux", "aarch64-linux"}) {
+    for (auto system : std::set<std::string>{"x86_64-linux", "aarch64-linux"}) {
         auto args = state.allocBindings(2);
         Value * vConfig = state.allocValue();
         state.mkAttrs(*vConfig, 0);
