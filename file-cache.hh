@@ -59,7 +59,7 @@ public:
         state->db.exec(cacheSchema);
 
         if (sqlite3_busy_timeout(state->db, 60 * 60 * 1000) != SQLITE_OK)
-            throwSQLiteError(state->db, "setting timeout");
+            SQLiteError::throw_(state->db, "setting timeout");
 
         state->queryPath.create(state->db,
             "select id from StorePaths where path = ?");

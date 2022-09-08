@@ -1,13 +1,13 @@
 {
   description = "Script for generating Nixpkgs/NixOS channels";
 
-  inputs.nixpkgs.url = "nixpkgs/nixos-20.03";
+  inputs.nixpkgs.follows = "nix/nixpkgs";
 
   outputs = { self, nixpkgs, nix }:
 
     {
 
-      overlay = final: prev: {
+      overlays.default = final: prev: {
 
         nixos-channel-native-programs = with final; stdenv.mkDerivation {
           name = "nixos-channel-native-programs";
@@ -75,7 +75,7 @@
 
       defaultPackage.x86_64-linux = (import nixpkgs {
         system = "x86_64-linux";
-        overlays = [ nix.overlay self.overlay ];
+        overlays = [ nix.overlays.default self.overlays.default ];
       }).nixos-channel-scripts;
 
     };

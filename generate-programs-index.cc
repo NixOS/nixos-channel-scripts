@@ -91,15 +91,10 @@ void mainWrapped(int argc, char * * argv)
     DrvInfos packages;
 
     for (auto system : std::set<std::string>{"x86_64-linux", "aarch64-linux"}) {
-        auto args = state.allocBindings(2);
-        Value * vConfig = state.allocValue();
-        state.mkAttrs(*vConfig, 0);
-        args->push_back(Attr(state.symbols.create("config"), vConfig));
-        Value * vSystem = state.allocValue();
-        mkString(*vSystem, system);
-        args->push_back(Attr(state.symbols.create("system"), vSystem));
-        args->sort();
-        getDerivations(state, vRoot, "", *args, packages, true);
+        auto args = state.buildBindings(2);
+        args.alloc(state.symbols.create("config")).mkAttrs(&state.emptyBindings);
+        args.alloc(state.symbols.create("system")).mkString(system);
+        getDerivations(state, vRoot, "", *args.finish(), packages, true);
     }
 
     /* For each store path, figure out the package with the shortest
@@ -110,15 +105,15 @@ void mainWrapped(int argc, char * * argv)
         try {
             auto outputs = package.queryOutputs(true);
 
-            for (auto & output : outputs) {
-                auto storePath = binaryCache->parseStorePath(output.second);
-                if (!allowedPathsClosure.count(storePath)) continue;
-                auto i = packagesByPath.find(storePath);
+            for (auto & [_, storePath] : outputs) {
+                if (!storePath) continue;
+                if (!allowedPathsClosure.count(*storePath)) continue;
+                auto i = packagesByPath.find(*storePath);
                 if (i != packagesByPath.end() &&
                     (i->second->attrPath.size() < package.attrPath.size() ||
                         (i->second->attrPath.size() == package.attrPath.size() && i->second->attrPath < package.attrPath)))
                     continue;
-                packagesByPath.emplace(std::move(storePath), &package);
+                packagesByPath.emplace(std::move(*storePath), &package);
             }
         } catch (AssertionError & e) {
         } catch (Error & e) {
