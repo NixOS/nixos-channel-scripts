@@ -209,7 +209,31 @@ if ($bucketReleases && $bucketReleases->head_key("$releasePrefix")) {
         }
     }
 
-    if ($channelName =~ /nixos/) {
+    if ($channelName =~ /^nixos-22.05/) {
+        my $arch = "x86_64-linux";
+        if ($channelName =~ /-aarch64/) {
+            $arch = "aarch64-linux";
+        }
+
+        downloadFile("nixos.channel", "nixexprs.tar.xz");
+        downloadFile("nixos.iso_minimal.$arch");
+        downloadFile("nixpkgs.tarball", "packages.json.br", "json-br");
+
+        # Only built on the main channel (x86_64-linux)
+        if ($arch eq "x86_64-linux") {
+            downloadFile("nixos.options", "options.json.br", "json-br");
+        }
+
+        # All of these paths are x86-specific only and are not in small channels
+        if ($arch eq "x86_64-linux" and $channelName !~ /-small/) {
+            downloadFile("nixos.iso_plasma5.$arch");
+            downloadFile("nixos.iso_gnome.$arch");
+
+            downloadFile("nixos.iso_minimal.i686-linux");
+            downloadFile("nixos.ova.$arch");
+	}
+
+    } elsif ($channelName =~ /nixos/) {
         downloadFile("nixos.channel", "nixexprs.tar.xz");
         downloadFile("nixpkgs.tarball", "packages.json.br", "json-br");
         downloadFile("nixos.options", "options.json.br", "json-br");
