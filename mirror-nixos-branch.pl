@@ -250,7 +250,7 @@ if ($bucketReleases && $bucketReleases->head_key("$releasePrefix")) {
             downloadFile("nixos.iso_gnome.x86_64-linux");
 
             downloadFile("nixos.iso_minimal.i686-linux");
-            downloadFile("nixos.ova.x86-64-linux");
+            downloadFile("nixos.ova.x86_64-linux");
         }
 
     } else {
