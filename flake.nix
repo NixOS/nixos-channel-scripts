@@ -2,9 +2,13 @@
   description = "Script for generating Nixpkgs/NixOS channels";
 
   inputs.nixpkgs.follows = "nix/nixpkgs";
+  inputs.nix-index = {
+    url = "github:bennofs/nix-index";
+    inputs.nixpkgs.follows = "nix/nixpkgs";
+  };
 
-  outputs = { self, nixpkgs, nix }:
-
+  outputs = { self, nixpkgs, nix, nix-index }:
+    let nix-index' = nix-index.packages.x86_64-linux.nix-index; in
     {
 
       overlays.default = final: prev: {
@@ -22,15 +26,6 @@
 
           buildCommand = ''
             mkdir -p $out/bin
-
-            cp ${./file-cache.hh} file-cache.hh
-
-            g++ -Os -g ${./generate-programs-index.cc} -Wall -std=c++14 -o $out/bin/generate-programs-index -I . \
-              $(pkg-config --cflags nix-main) \
-              $(pkg-config --libs nix-main) \
-              $(pkg-config --libs nix-expr) \
-              $(pkg-config --libs nix-store) \
-              -lsqlite3 -lgc
 
             g++ -Os -g ${./index-debuginfo.cc} -Wall -std=c++14 -o $out/bin/index-debuginfo -I . \
               $(pkg-config --cflags nix-main) \
@@ -57,6 +52,7 @@
               brotli
               jq
               nixos-channel-native-programs
+              nix-index'
             ];
 
           buildCommand = ''
@@ -65,7 +61,7 @@
             cp ${./mirror-nixos-branch.pl} $out/bin/mirror-nixos-branch
             wrapProgram $out/bin/mirror-nixos-branch \
               --set PERL5LIB $PERL5LIB \
-              --prefix PATH : ${wget}/bin:${git}/bin:${final.nix}/bin:${gnutar}/bin:${xz}/bin:${rsync}/bin:${openssh}/bin:${nixos-channel-native-programs}/bin:$out/bin
+              --prefix PATH : ${wget}/bin:${git}/bin:${final.nix}/bin:${gnutar}/bin:${xz}/bin:${rsync}/bin:${openssh}/bin:${nix-index'}/bin:${nixos-channel-native-programs}/bin:$out/bin
 
             patchShebangs $out/bin
           '';
