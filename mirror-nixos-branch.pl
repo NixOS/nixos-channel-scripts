@@ -373,7 +373,7 @@ if ($channelName =~ /nixos/) {
     redirect("$channelName/options.json.br", "$releasePrefix/options.json.br");
 
     # Redirects for latest images.
-    for my $arch ("x86_64-linux", "i686-linux") {
+    for my $arch ("x86_64-linux", "i686-linux", "aarch64-linux") {
         for my $artifact ("nixos-graphical",
                           "nixos-plasma5",
                           "nixos-gnome",
