@@ -1,22 +1,15 @@
 {
   description = "Script for generating Nixpkgs/NixOS channels";
 
-  inputs.nixpkgs.follows = "nix/nixpkgs";
-  inputs.nix-index = {
-    url = "github:bennofs/nix-index";
-    inputs.nixpkgs.follows = "nix/nixpkgs";
-  };
+  inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-22.11-small";
 
-  outputs = { self, nixpkgs, nix, nix-index }:
-    let nix-index' = nix-index.packages.x86_64-linux.nix-index; in
+  outputs = { self, nixpkgs }:
     {
-
       overlays.default = final: prev: {
-
         nixos-channel-native-programs = with final; stdenv.mkDerivation {
           name = "nixos-channel-native-programs";
           buildInputs = [
-              final.nix
+              nix
               pkgconfig
               boehmgc
               nlohmann_json
@@ -38,8 +31,8 @@
         nixos-channel-scripts = with final; stdenv.mkDerivation {
           name = "nixos-channel-scripts";
 
-          buildInputs = with final.perlPackages;
-            [ final.nix
+          buildInputs = with perlPackages;
+            [ nix
               sqlite
               makeWrapper
               perl
@@ -52,7 +45,7 @@
               brotli
               jq
               nixos-channel-native-programs
-              nix-index'
+              nix-index
             ];
 
           buildCommand = ''
@@ -61,7 +54,7 @@
             cp ${./mirror-nixos-branch.pl} $out/bin/mirror-nixos-branch
             wrapProgram $out/bin/mirror-nixos-branch \
               --set PERL5LIB $PERL5LIB \
-              --prefix PATH : ${wget}/bin:${git}/bin:${final.nix}/bin:${gnutar}/bin:${xz}/bin:${rsync}/bin:${openssh}/bin:${nix-index'}/bin:${nixos-channel-native-programs}/bin:$out/bin
+              --prefix PATH : ${lib.makeBinPath [ wget git nix gnutar xz rsync openssh nix-index nixos-channel-native-programs ]}
 
             patchShebangs $out/bin
           '';
@@ -71,8 +64,7 @@
 
       defaultPackage.x86_64-linux = (import nixpkgs {
         system = "x86_64-linux";
-        overlays = [ nix.overlays.default self.overlays.default ];
+        overlays = [ self.overlays.default ];
       }).nixos-channel-scripts;
-
     };
 }
