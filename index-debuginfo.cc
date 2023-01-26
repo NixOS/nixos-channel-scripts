@@ -36,7 +36,7 @@ void mainWrapped(int argc, char * * argv)
         json["archive"] = url;
         json["member"] = filename;
 
-        std::string key = "debuginfo/" + buildId;
+        std::string key = "debuginfo/" + build_id;
 
         // FIXME: or should we overwrite? The previous link may point
         // to a GC'ed file, so overwriting might be useful...
