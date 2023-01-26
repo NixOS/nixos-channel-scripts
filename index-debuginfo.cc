@@ -36,13 +36,15 @@ void mainWrapped(int argc, char * * argv)
         json["archive"] = url;
         json["member"] = filename;
 
+        std::string key = "debuginfo/" + buildId;
+
         // FIXME: or should we overwrite? The previous link may point
         // to a GC'ed file, so overwriting might be useful...
-        if (binaryCache->fileExists(build_id)) return;
+        if (binaryCache->fileExists(key)) return;
 
-        printError("redirecting ‘%s’ to ‘%s’", build_id, filename);
+        printError("redirecting ‘%s’ to ‘%s’", key, filename);
 
-        binaryCache->upsertFile(build_id, json.dump(), "application/json");
+        binaryCache->upsertFile(key, json.dump(), "application/json");
     };
 
     auto db = SQLite(debugDbPath);
