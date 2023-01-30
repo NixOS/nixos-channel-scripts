@@ -1,18 +1,15 @@
 {
   description = "Script for generating Nixpkgs/NixOS channels";
 
-  inputs.nixpkgs.follows = "nix/nixpkgs";
+  inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-22.11-small";
 
-  outputs = { self, nixpkgs, nix }:
-
+  outputs = { self, nixpkgs }:
     {
-
       overlays.default = final: prev: {
-
         nixos-channel-native-programs = with final; stdenv.mkDerivation {
           name = "nixos-channel-native-programs";
           buildInputs = [
-              final.nix
+              nix
               pkgconfig
               boehmgc
               nlohmann_json
@@ -22,15 +19,6 @@
 
           buildCommand = ''
             mkdir -p $out/bin
-
-            cp ${./file-cache.hh} file-cache.hh
-
-            g++ -Os -g ${./generate-programs-index.cc} -Wall -std=c++14 -o $out/bin/generate-programs-index -I . \
-              $(pkg-config --cflags nix-main) \
-              $(pkg-config --libs nix-main) \
-              $(pkg-config --libs nix-expr) \
-              $(pkg-config --libs nix-store) \
-              -lsqlite3 -lgc
 
             g++ -Os -g ${./index-debuginfo.cc} -Wall -std=c++14 -o $out/bin/index-debuginfo -I . \
               $(pkg-config --cflags nix-main) \
@@ -43,8 +31,8 @@
         nixos-channel-scripts = with final; stdenv.mkDerivation {
           name = "nixos-channel-scripts";
 
-          buildInputs = with final.perlPackages;
-            [ final.nix
+          buildInputs = with perlPackages;
+            [ nix
               sqlite
               makeWrapper
               perl
@@ -57,6 +45,7 @@
               brotli
               jq
               nixos-channel-native-programs
+              nix-index
             ];
 
           buildCommand = ''
@@ -65,7 +54,7 @@
             cp ${./mirror-nixos-branch.pl} $out/bin/mirror-nixos-branch
             wrapProgram $out/bin/mirror-nixos-branch \
               --set PERL5LIB $PERL5LIB \
-              --prefix PATH : ${wget}/bin:${git}/bin:${final.nix}/bin:${gnutar}/bin:${xz}/bin:${rsync}/bin:${openssh}/bin:${nixos-channel-native-programs}/bin:$out/bin
+              --prefix PATH : ${lib.makeBinPath [ wget git nix gnutar xz rsync openssh nix-index nixos-channel-native-programs ]}
 
             patchShebangs $out/bin
           '';
@@ -75,8 +64,7 @@
 
       defaultPackage.x86_64-linux = (import nixpkgs {
         system = "x86_64-linux";
-        overlays = [ nix.overlays.default self.overlays.default ];
+        overlays = [ self.overlays.default ];
       }).nixos-channel-scripts;
-
     };
 }

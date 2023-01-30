@@ -3,11 +3,12 @@
 #include <regex>
 
 #include "shared.hh"
+#include "sqlite.hh"
 #include "s3-binary-cache-store.hh"
 #include "thread-pool.hh"
 #include "nar-info.hh"
 
-#include "file-cache.hh"
+#include <nlohmann/json.hpp>
 
 // cache.nixos.org/debuginfo/<build-id>
 //  => redirect to NAR
@@ -18,74 +19,42 @@ void mainWrapped(int argc, char * * argv)
 {
     initNix();
 
-    if (argc != 4) throw Error("usage: index-debuginfo CACHE-DB BINARY-CACHE-URI STORE-PATHS");
+    if (argc != 3) throw Error("usage: index-debuginfo DEBUG-DB BINARY-CACHE-URI");
 
-    Path cacheDbPath = argv[1];
+    Path debugDbPath = argv[1];
     std::string binaryCacheUri = argv[2];
-    Path storePathsFile = argv[3];
-
-    FileCache fileCache(cacheDbPath);
 
     if (hasSuffix(binaryCacheUri, "/")) binaryCacheUri.pop_back();
     auto binaryCache = openStore(binaryCacheUri).cast<S3BinaryCacheStore>();
 
-    auto storePaths = binaryCache->parseStorePathSet(tokenizeString<PathSet>(readFile(storePathsFile)));
-
-    std::regex debugFileRegex("^lib/debug/\\.build-id/[0-9a-f]{2}/[0-9a-f]{38}\\.debug$");
-
     ThreadPool threadPool(25);
 
-    auto doFile = [&](std::string member, std::string key, std::string target) {
+    auto doFile = [&](std::string build_id, std::string url, std::string filename) {
         checkInterrupt();
 
         nlohmann::json json;
-        json["archive"] = target;
-        json["member"] = member;
+        json["archive"] = url;
+        json["member"] = filename;
+
+        std::string key = "debuginfo/" + build_id;
 
         // FIXME: or should we overwrite? The previous link may point
         // to a GC'ed file, so overwriting might be useful...
         if (binaryCache->fileExists(key)) return;
 
-        printError("redirecting ‘%s’ to ‘%s’", key, target);
+        printError("redirecting ‘%s’ to ‘%s’", key, filename);
 
         binaryCache->upsertFile(key, json.dump(), "application/json");
     };
 
-    auto doPath = [&](const Path & storePath) {
-        checkInterrupt();
+    auto db = SQLite(debugDbPath);
 
-        try {
-            auto files = fileCache.getFiles(binaryCache, storePath);
+    auto stmt = SQLiteStmt(db, "select build_id, url, filename from DebugInfo;");
+    auto query = stmt.use();
 
-            std::string prefix = "lib/debug/.build-id/";
-
-            for (auto & file : files) {
-                if (file.second.type != FSAccessor::Type::tRegular
-                    || !std::regex_match(file.first, debugFileRegex))
-                    continue;
-
-                std::string buildId =
-                    std::string(file.first, prefix.size(), 2)  +
-                    std::string(file.first, prefix.size() + 3, 38);
-
-                auto info = binaryCache->queryPathInfo(binaryCache->parseStorePath(storePath)).cast<const NarInfo>();
-
-                assert(hasPrefix(info->url, "nar/"));
-
-                std::string key = "debuginfo/" + buildId;
-                std::string target = "../" + info->url;
-
-                threadPool.enqueue(std::bind(doFile, file.first, key, target));
-            }
-
-        } catch (BadJSON & e) {
-            printError("error: in %s: %s", storePath, e.what());
-        }
-    };
-
-    for (auto & storePath : storePaths)
-        if (hasSuffix(storePath.name(), "-debug"))
-            threadPool.enqueue(std::bind(doPath, binaryCache->printStorePath(storePath)));
+    while (query.next()) {
+        threadPool.enqueue(std::bind(doFile, query.getStr(0), query.getStr(1), query.getStr(2)));
+    }
 
     threadPool.process();
 }
