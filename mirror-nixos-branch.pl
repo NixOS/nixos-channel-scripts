@@ -194,13 +194,13 @@ if ($bucketReleases && $bucketReleases->head_key("$releasePrefix")) {
         if (! -e $dstFile) {
             print STDERR "downloading $srcFile to $dstFile...\n";
             write_file("$dstFile.sha256", "$sha256_expected  $dstName");
-            runAllowFailure("NIX_REMOTE=https://cache.nixos.org/ nix --experimental-features nix-command cat-store '$srcFile' > '$dstFile.tmp'") == 0
+            runAllowFailure("NIX_REMOTE=https://cache.nixos.org/ nix --experimental-features nix-command store cat '$srcFile' > '$dstFile.tmp'") == 0
                 or die "unable to fetch $srcFile\n";
             rename("$dstFile.tmp", $dstFile) or die;
         }
 
         if (-e "$dstFile.sha256") {
-            my $sha256_actual = `nix --experimental-features nix-command hash-file --base16 --type sha256 '$dstFile'`;
+            my $sha256_actual = `nix --experimental-features nix-command hash file --base16 --type sha256 '$dstFile'`;
             chomp $sha256_actual;
             if ($sha256_expected ne $sha256_actual) {
                 print STDERR "file $dstFile is corrupt $sha256_expected $sha256_actual\n";
