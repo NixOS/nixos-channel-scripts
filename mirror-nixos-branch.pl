@@ -225,7 +225,9 @@ if ($bucketReleases && $bucketReleases->head_key("$releasePrefix")) {
             downloadFile("nixos.iso_gnome.aarch64-linux");
             downloadFile("nixos.iso_gnome.x86_64-linux");
 
-            downloadFile("nixos.iso_minimal.i686-linux");
+            if ($channelName =~ /nixos-2[0123]/) { # i686 dropped for > 23.11
+                downloadFile("nixos.iso_minimal.i686-linux");
+            }
             downloadFile("nixos.ova.x86_64-linux");
         }
 
@@ -350,6 +352,9 @@ if ($channelName =~ /nixos/) {
 
     # Redirects for latest images.
     for my $arch ("x86_64-linux", "i686-linux", "aarch64-linux") {
+        # i686 dropped for > 23.11
+        next if $arch eq "i686-linux" && $channelName !~ /nixos-2[0123]/;
+
         for my $artifact ("nixos-graphical",
                           "nixos-plasma5",
                           "nixos-gnome",
