@@ -194,7 +194,7 @@ if ($bucketReleases && $bucketReleases->head_key("$releasePrefix")) {
         if (! -e $dstFile) {
             print STDERR "downloading $srcFile to $dstFile...\n";
             write_file("$dstFile.sha256", "$sha256_expected  $dstName");
-            runAllowFailure("NIX_REMOTE=https://cache.nixos.org/ nix --experimental-features nix-command store cat '$srcFile' > '$dstFile.tmp'") == 0
+            runAllowFailure("NIX_REMOTE=s3://nix-cache nix --experimental-features nix-command store cat '$srcFile' > '$dstFile.tmp'") == 0
                 or die "unable to fetch $srcFile\n";
             rename("$dstFile.tmp", $dstFile) or die;
         }
