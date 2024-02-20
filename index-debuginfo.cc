@@ -8,6 +8,11 @@
 #include "thread-pool.hh"
 #include "nar-info.hh"
 
+// https://github.com/NixOS/nix/commit/ac89bb064aeea85a62b82a6daf0ecca7190a28b7
+#ifdef HAS_SIGNALS_HH
+#include "signals.hh"
+#endif
+
 #include <nlohmann/json.hpp>
 
 // cache.nixos.org/debuginfo/<build-id>

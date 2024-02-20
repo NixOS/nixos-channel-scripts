@@ -17,14 +17,17 @@
               sqlite
           ];
 
-          buildCommand = ''
+          buildCommand = let
+            nixHasSignalsHh = nixpkgs.lib.strings.versionAtLeast nix.version "2.19";
+          in ''
             mkdir -p $out/bin
 
             g++ -Os -g ${./index-debuginfo.cc} -Wall -std=c++14 -o $out/bin/index-debuginfo -I . \
               $(pkg-config --cflags nix-main) \
               $(pkg-config --libs nix-main) \
               $(pkg-config --libs nix-store) \
-              -lsqlite3
+              -lsqlite3 \
+              ${nixpkgs.lib.optionalString nixHasSignalsHh "-DHAS_SIGNALS_HH"}
           '';
         };
 
