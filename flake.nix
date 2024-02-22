@@ -57,6 +57,7 @@
             cp ${./mirror-nixos-branch.pl} $out/bin/mirror-nixos-branch
             wrapProgram $out/bin/mirror-nixos-branch \
               --set PERL5LIB $PERL5LIB \
+              --set XZ_OPT "-T0" \
               --prefix PATH : ${lib.makeBinPath [ wget git nix gnutar xz rsync openssh nix-index nixos-channel-native-programs ]}
 
             patchShebangs $out/bin
