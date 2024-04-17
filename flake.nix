@@ -6,6 +6,10 @@
   outputs = { self, nixpkgs }:
     {
       overlays.default = final: prev: {
+        nix-index-unwrapped = prev.nix-index-unwrapped.overrideAttrs(old: {
+          patches = [ ./nix-index-https.patch ];
+        });
+
         nixos-channel-native-programs = with final; stdenv.mkDerivation {
           name = "nixos-channel-native-programs";
           buildInputs = [
@@ -48,7 +52,7 @@
               brotli
               jq
               nixos-channel-native-programs
-              nix-index
+              nix-index-unwrapped
             ];
 
           buildCommand = ''
