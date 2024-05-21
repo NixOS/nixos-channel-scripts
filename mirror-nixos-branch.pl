@@ -219,8 +219,13 @@ if ($bucketReleases && $bucketReleases->head_key("$releasePrefix")) {
 
         # All of these jobs are not present in small channels
         if ($channelName !~ /-small/) {
-            downloadFile("nixos.iso_plasma5.aarch64-linux");
-            downloadFile("nixos.iso_plasma5.x86_64-linux");
+            if ($channelName =~ /nixos-2[0123]/) {
+                downloadFile("nixos.iso_plasma5.aarch64-linux");
+                downloadFile("nixos.iso_plasma5.x86_64-linux");
+            } else {
+                downloadFile("nixos.iso_plasma6.aarch64-linux");
+                downloadFile("nixos.iso_plasma6.x86_64-linux");
+            }
 
             downloadFile("nixos.iso_gnome.aarch64-linux");
             downloadFile("nixos.iso_gnome.x86_64-linux");
@@ -357,6 +362,7 @@ if ($channelName =~ /nixos/) {
 
         for my $artifact ("nixos-graphical",
                           "nixos-plasma5",
+                          "nixos-plasma6",
                           "nixos-gnome",
                           "nixos-minimal",
             )
