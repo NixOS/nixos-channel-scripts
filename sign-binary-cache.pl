@@ -1,11 +1,13 @@
 #! /usr/bin/env nix-shell
-#! nix-shell -i perl -p perl perlPackages.NetAmazonS3 perlPackages.ForksSuper perlPackages.DBDSQLite
+#! nix-shell -i perl -p perl perlPackages.NetAmazonS3 perlPackages.ForksSuper perlPackages.DBDSQLite nix.perl-bindings
 
 use strict;
 use Forks::Super 'bg_eval';
 use List::MoreUtils qw(part);
 use MIME::Base64;
 use Net::Amazon::S3;
+use Net::Amazon::S3::Authorization::Basic;
+use Net::Amazon::S3::Vendor::Generic;
 use Nix::Manifest;
 use Nix::Store;
 use Nix::Utils;
@@ -18,6 +20,7 @@ my $s = readFile $secretKeyFile;
 chomp $s;
 my ($keyName, $secretKey) = split ":", $s;
 die "invalid secret key file ‘$secretKeyFile’\n" unless defined $keyName && defined $secretKey;
+$secretKey = $s;	# API now wants whole key including name
 
 my @files;
 while (<>) {
@@ -30,9 +33,19 @@ my $aws_access_key_id = $ENV{'AWS_ACCESS_KEY_ID'} or die;
 my $aws_secret_access_key = $ENV{'AWS_SECRET_ACCESS_KEY'} or die;
 
 my $s3 = Net::Amazon::S3->new(
-    { aws_access_key_id     => $aws_access_key_id,
-      aws_secret_access_key => $aws_secret_access_key,
+    {
       retry                 => 1,
+      authorization_context => Net::Amazon::S3::Authorization::Basic->new (
+        aws_access_key_id     => $aws_access_key_id,
+        aws_secret_access_key => $aws_secret_access_key,
+        ),
+      vendor => Net::Amazon::S3::Vendor::Generic->new (
+        host => "local-cache.lan:3900",
+        use_https => 0,
+        use_virtual_host => 0,
+        default_region => "garage",
+        authorization_method => 'Net::Amazon::S3::Signature::V4',
+        )
     });
 
 my $bucket = $s3->bucket($bucketName) or die;
@@ -75,8 +88,8 @@ sub signNarInfo {
     my $refs = [ map { "$Nix::Config::storeDir/$_" } @{$narInfo->{refs}} ];
     my $fingerprint = fingerprintPath($storePath, $narHash, $narInfo->{narSize}, $refs);
     #print STDERR "FP = $fingerprint\n";
-    my $sig = encode_base64(signString(decode_base64($secretKey), $fingerprint), "");
-    $contents .= "Sig: $keyName:$sig\n";
+    my $sig = signString($secretKey, $fingerprint);
+    $contents .= "Sig: $sig\n";
 
     $bucket->add_key($fn, $contents) or die "failed to upload $fn\n";
 }
