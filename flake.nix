@@ -1,31 +1,11 @@
 {
   description = "Script for generating Nixpkgs/NixOS channels";
 
-  inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-23.11-small";
+  inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-24.05-small";
 
   outputs = { self, nixpkgs }:
     {
       overlays.default = final: prev: {
-        nix-index-unwrapped = (prev.nix-index-unwrapped.override {
-          rustPlatform = final.rustPackages_1_76.rustPlatform;
-        }).overrideAttrs(old: rec {
-          version = "0.1.7-unstable-2024-05-11";
-          
-          # commit with proper HTTPS fixes
-          # FIXME: unpin after next release 
-          src = final.fetchFromGitHub {
-            owner = "nix-community";
-            repo = "nix-index";
-            rev = "195fb3525038e40836b8d286371365f5e7857c0c";
-            hash = "sha256-Cw6Q9rHcLjPKzab5O4G7cetFAaTZCex2VLvYIhJCbpg=";
-          };
-
-          cargoDeps = final.rustPlatform.fetchCargoTarball {
-            inherit src;
-            hash = "sha256-Pl56f8FU/U/x4gkTt5yXxE8FVQ/pGBDuxxP7HrfsaBc=";
-          };
-        });
-
         nixos-channel-native-programs = with final; stdenv.mkDerivation {
           name = "nixos-channel-native-programs";
           buildInputs = [
@@ -68,7 +48,7 @@
               brotli
               jq
               nixos-channel-native-programs
-              nix-index-unwrapped
+              nix-index
             ];
 
           buildCommand = ''
