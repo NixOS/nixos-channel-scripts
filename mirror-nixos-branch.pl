@@ -214,8 +214,12 @@ if ($bucketReleases && $bucketReleases->head_key("$releasePrefix")) {
         downloadFile("nixpkgs.tarball", "packages.json.br", "json-br");
         downloadFile("nixos.options", "options.json.br", "json-br");
 
-        downloadFile("nixos.iso_minimal.aarch64-linux");
-        downloadFile("nixos.iso_minimal.x86_64-linux");
+        # Minimal installer ISOs were dropped from the small channel
+        if ($channelName !~ /-small/ ||
+            $channelName =~ /nixos-2([0123]\...|4\.05)-small/) {
+            downloadFile("nixos.iso_minimal.aarch64-linux");
+            downloadFile("nixos.iso_minimal.x86_64-linux");
+        }
 
         # All of these jobs are not present in small channels
         if ($channelName !~ /-small/) {
