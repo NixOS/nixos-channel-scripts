@@ -233,7 +233,10 @@ if ($bucketReleases && $bucketReleases->head_key("$releasePrefix")) {
             if ($channelName =~ /nixos-2[0123]/) { # i686 dropped for > 23.11
                 downloadFile("nixos.iso_minimal.i686-linux");
             }
-            downloadFile("nixos.ova.x86_64-linux");
+
+            if ($channelName =~ /nixos-2([0123]\...|4\.05)/) {
+                downloadFile("nixos.ova.x86_64-linux");
+            }
         }
 
     } else {
