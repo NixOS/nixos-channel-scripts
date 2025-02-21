@@ -342,16 +342,25 @@ run("git push origin $rev:refs/heads/$channelName >&2");
 my $cache_control = "maxage=600,stale-while-revalidate=1800,public";
 
 sub redirect {
-    my ($from, $to) = @_;
+    my ($from, $to, $immutable_flake_tarball) = @_;
     $to = "https://releases.nixos.org/" . $to;
     print STDERR "redirect $from -> $to\n";
-    $bucketChannels->add_key($from, "", { "x-amz-website-redirect-location" => $to, "cache-control" => $cache_control })
+    my $object_metadata = { "x-amz-website-redirect-location" => $to, "cache-control" => $cache_control };
+    if ($immutable_flake_tarball // 0) {
+        # Optionally sets a header for the "Lockable HTTP Tarball Protocol".
+        # See <https://github.com/NixOS/nix/blob/61f49de7ae0b3899abdcc102832523153dd40d35/doc/manual/source/protocols/tarball-fetcher.md>.
+        # AWS S3 does not not allow setting the "Link" header directly.
+        # Instead, we prefix the header with "x-amz-meta" and let Fastly
+        # rename the header for us.
+        $object_metadata->{'x-amz-meta-link'} = "<$to?rev=$rev>; rel=\"immutable\"";
+    }
+    $bucketChannels->add_key($from, "", $object_metadata)
         or die $bucketChannels->err . ": " . $bucketChannels->errstr;
 }
 
 # Update channels on channels.nixos.org.
 redirect($channelName, $releasePrefix);
-redirect("$channelName/nixexprs.tar.xz", "$releasePrefix/nixexprs.tar.xz");
+redirect("$channelName/nixexprs.tar.xz", "$releasePrefix/nixexprs.tar.xz", 1);
 redirect("$channelName/git-revision", "$releasePrefix/git-revision");
 redirect("$channelName/packages.json.br", "$releasePrefix/packages.json.br");
 redirect("$channelName/store-paths.xz", "$releasePrefix/store-paths.xz");
