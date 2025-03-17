@@ -223,16 +223,22 @@ if ($bucketReleases && $bucketReleases->head_key("$releasePrefix")) {
 
         # All of these jobs are not present in small channels
         if ($channelName !~ /-small/) {
-            if ($channelName =~ /nixos-2[0123]/) {
-                downloadFile("nixos.iso_plasma5.aarch64-linux");
-                downloadFile("nixos.iso_plasma5.x86_64-linux");
-            } else {
-                downloadFile("nixos.iso_plasma6.aarch64-linux");
-                downloadFile("nixos.iso_plasma6.x86_64-linux");
-            }
+            # These jobs were combined into a single job
+            if ($channelName =~ /nixos-2[01234]/) {
+                if ($channelName =~ /nixos-2[0123]/) {
+                    downloadFile("nixos.iso_plasma5.aarch64-linux");
+                    downloadFile("nixos.iso_plasma5.x86_64-linux");
+                } else {
+                    downloadFile("nixos.iso_plasma6.aarch64-linux");
+                    downloadFile("nixos.iso_plasma6.x86_64-linux");
+                }
 
-            downloadFile("nixos.iso_gnome.aarch64-linux");
-            downloadFile("nixos.iso_gnome.x86_64-linux");
+                downloadFile("nixos.iso_gnome.aarch64-linux");
+                downloadFile("nixos.iso_gnome.x86_64-linux");
+            } else {
+                downloadFile("nixos.iso_graphical.aarch64-linux");
+                downloadFile("nixos.iso_graphical.x86_64-linux");
+            }
 
             if ($channelName =~ /nixos-2[0123]/) { # i686 dropped for > 23.11
                 downloadFile("nixos.iso_minimal.i686-linux");
