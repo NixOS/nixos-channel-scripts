@@ -1,7 +1,8 @@
 {
   description = "Script for generating Nixpkgs/NixOS channels";
 
-  inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-24.05-small";
+  # Temporary until (a) Hydra catches up (b) 25.05 is branched
+  inputs.nixpkgs.url = "github:NixOS/nixpkgs/master";
 
   outputs =
     { self, nixpkgs }:
