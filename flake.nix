@@ -66,9 +66,11 @@
 
       };
 
-      defaultPackage.x86_64-linux = (import nixpkgs {
+      packages.default.x86_64-linux = (import nixpkgs {
         system = "x86_64-linux";
         overlays = [ self.overlays.default ];
       }).nixos-channel-scripts;
+
+      checks.x86_64-linux.default = self.packages.default.x86_64-linux;
     };
 }
