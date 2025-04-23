@@ -1,19 +1,15 @@
-#include <nix/config.h>
-
 #include <regex>
 
-#include "shared.hh"
-#include "sqlite.hh"
-#include "s3-binary-cache-store.hh"
-#include "thread-pool.hh"
-#include "nar-info.hh"
-
-// https://github.com/NixOS/nix/commit/ac89bb064aeea85a62b82a6daf0ecca7190a28b7
-#ifdef HAS_SIGNALS_HH
-#include "signals.hh"
-#endif
-
 #include <nlohmann/json.hpp>
+
+#include <nix/util/signals.hh>
+#include <nix/util/thread-pool.hh>
+
+#include <nix/store/nar-info.hh>
+#include <nix/store/s3-binary-cache-store.hh>
+#include <nix/store/sqlite.hh>
+
+#include <nix/main/shared.hh>
 
 // cache.nixos.org/debuginfo/<build-id>
 //  => redirect to NAR
