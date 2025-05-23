@@ -1,7 +1,7 @@
 {
   description = "Script for generating Nixpkgs/NixOS channels";
 
-  inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-24.11-small";
+  inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.05-small";
 
   outputs =
     { self, nixpkgs }:
