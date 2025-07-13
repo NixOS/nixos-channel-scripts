@@ -1,10 +1,13 @@
 {
   description = "Script for generating Nixpkgs/NixOS channels";
 
-  inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.05-small";
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.05-small";
+    nix-index.url = "github:K900/nix-index/debuginfo-fixes";
+  };
 
   outputs =
-    { self, nixpkgs }:
+    { self, nixpkgs, nix-index }:
     {
       overlays.default = final: prev: {
         nixos-channel-native-programs = final.stdenv.mkDerivation {
@@ -73,7 +76,7 @@
                     xz
                     rsync
                     openssh
-                    nix-index
+                    nix-index.packages.x86_64-linux.default
                     nixos-channel-native-programs
                   ]
                 )
