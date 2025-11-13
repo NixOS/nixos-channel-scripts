@@ -107,8 +107,12 @@ my $releasePrefix = "$channelDirRel/$releaseName";
 
 my $rev = $evalInfo->{jobsetevalinputs}->{nixpkgs}->{revision} or die;
 
+# Get commit date of $rev as unixtime and formatted string
+my $revUnix = `git show --no-patch --format='%ct' $rev` or die;
+my $revDate = strftime("%F %T", localtime($revUnix));
+
 print STDERR "\nRelease information:\n";
-print STDERR " - release is: $releaseName (build $releaseId)\n - eval is: $evalId\n - prefix is: $releasePrefix\n - Git commit is: $rev\n\n";
+print STDERR " - release is: $releaseName (build $releaseId)\n - eval is: $evalId\n - prefix is: $releasePrefix\n - Git commit is: $rev\n - Git commit date is: $revDate\n\n";
 
 if ($bucketChannels) {
     # Guard against the channel going back in time.
@@ -280,7 +284,7 @@ if ($bucketReleases && $bucketReleases->head_key("$releasePrefix")) {
     my $html = "<html><head>";
     $html .= "<title>$title</title></head>";
     $html .= "<body><h1>$title</h1>";
-    $html .= "<p>Released on $now from <a href='$githubLink'>Git commit <tt>$rev</tt></a> ";
+    $html .= "<p>Released on $now from <a href='$githubLink'>Git commit <tt>$rev</tt></a> from $revDate ";
     $html .= "via <a href='$evalUrl'>Hydra evaluation $evalId</a>.</p>";
     $html .= "<table><thead><tr><th>File name</th><th>Size</th><th>SHA-256 hash</th></tr></thead><tbody>";
 
@@ -357,7 +361,7 @@ sub redirect {
 
 # Update channels on channels.nixos.org.
 redirect($channelName, $releasePrefix);
-redirect("$channelName/nixexprs.tar.xz", "$releasePrefix/nixexprs.tar.xz?rev=$rev");
+redirect("$channelName/nixexprs.tar.xz", "$releasePrefix/nixexprs.tar.xz?rev=$rev&lastModified=$revUnix");
 redirect("$channelName/git-revision", "$releasePrefix/git-revision");
 redirect("$channelName/packages.json.br", "$releasePrefix/packages.json.br");
 redirect("$channelName/store-paths.xz", "$releasePrefix/store-paths.xz");
