@@ -109,7 +109,7 @@ my $rev = $evalInfo->{jobsetevalinputs}->{nixpkgs}->{revision} or die;
 
 # Get commit date of $rev as unixtime and formatted string
 my $revUnix = `git show --no-patch --format='%ct' $rev` or die;
-my $revDate = strftime("%F %T", localtime($revUnix));
+my $revDate = strftime("%F %T %Z", localtime($revUnix));
 
 print STDERR "\nRelease information:\n";
 print STDERR " - release is: $releaseName (build $releaseId)\n - eval is: $evalId\n - prefix is: $releasePrefix\n - Git commit is: $rev\n - Git commit date is: $revDate\n\n";
@@ -277,7 +277,7 @@ if ($bucketReleases && $bucketReleases->head_key("$releasePrefix")) {
         run("xz", "$tmpDir/store-paths");
     }
 
-    my $now = strftime("%F %T", localtime);
+    my $now = strftime("%F %T %Z", localtime);
     my $title = "$channelName release $releaseName";
     my $githubLink = "https://github.com/NixOS/nixpkgs/commits/$rev";
 
