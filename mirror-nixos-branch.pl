@@ -108,7 +108,7 @@ my $releasePrefix = "$channelDirRel/$releaseName";
 my $rev = $evalInfo->{jobsetevalinputs}->{nixpkgs}->{revision} or die;
 
 # Get commit date of $rev as unixtime and formatted string
-run("git fetch origin $rev >&2") or die;
+run("git fetch origin $rev >&2");
 my $revUnix = `git show --no-patch --format='%ct' $rev` or die;
 my $revDate = strftime("%F %T %Z", localtime($revUnix));
 
