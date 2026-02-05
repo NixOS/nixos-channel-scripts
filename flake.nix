@@ -36,6 +36,21 @@
           '';
         };
 
+        # TODO: drop after getting fixed
+        # https://github.com/nix-community/nix-index/pull/296
+        nix-index-unwrapped = prev.nix-index-unwrapped.overrideAttrs (oa: {
+          postPatch = (oa.postPatch or "") + ''
+            patch -p1 <<-EOF
+              --- a/src/listings.rs
+              +++ b/src/listings.rs
+              @@ -26,2 +26 @@
+              -pub const EXTRA_SCOPES: [&str; 6] = [
+              -    "xorg",
+              +pub const EXTRA_SCOPES: [&str; 5] = [
+            EOF
+          '';
+        });
+
         nixos-channel-scripts = final.stdenv.mkDerivation {
           name = "nixos-channel-scripts";
 
