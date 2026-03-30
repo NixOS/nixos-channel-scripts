@@ -48,6 +48,20 @@
               -    "xorg",
               +pub const EXTRA_SCOPES: [&str; 5] = [
             EOF
+
+            patch -p1 <<-EOF
+              --- a/src/listings.rs
+              +++ b/src/listings.rs
+              @@ -26,10 +26,9 @@ use crate::workset::{WorkSet, WorkSetHandle, WorkSetWatch};
+              -pub const EXTRA_SCOPES: [&str; 5] = [
+              +pub const EXTRA_SCOPES: [&str; 4] = [
+                   "haskellPackages",
+                   "rPackages",
+              -    "nodePackages",
+                   "coqPackages",
+                   "texlive.pkgs",
+               ];
+            EOF
           '';
         });
 
