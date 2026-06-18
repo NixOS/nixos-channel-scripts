@@ -22,7 +22,7 @@ jobs:
           #- ubuntu-22.04-arm
           #- macos-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: cachix/install-nix-action@v31
       - uses: cachix/cachix-action@v17
         with:
