@@ -1,3 +1,8 @@
+> [!IMPORTANT]
+> This repo has been merged into https://github.com/nixos/infra where maintenance continues.
+
+# nixos-channel-scripts
+
 ## Building
 
     $ nix-build
